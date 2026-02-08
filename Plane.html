@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Juego de Aviones Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB; /* Azul cielo */
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(#87CEEB, #E0F7FA);
+            border-bottom: 20px solid #228B22; /* Suelo verde */
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #333;
+            pointer-events: none;
+        }
+        h1 { margin: 0; font-size: 24px; }
+        p { margin: 5px; font-size: 18px; }
+        #gameOverScreen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #ff5722;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover { background-color: #e64a19; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>✈️ Sky Pilot</h1>
+        <p>Puntaje: <span id="scoreVal">0</span></p>
+        <p style="font-size: 14px; opacity: 0.8;">Usa las FLECHAS o W/S para moverte</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="gameOverScreen">
+        <h2 style="color: darkred;">¡Te estrellaste!</h2>
+        <p>Puntaje Final: <span id="finalScore">0</span></p>
+        <button onclick="resetGame()">Volar de nuevo</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Ajustar canvas al tamaño de la ventana
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight - 20; // Menos el borde del suelo
+
+        // Variables del juego
+        let gameRunning = true;
+        let score = 0;
+        let frame = 0;
+        let speed = 5;
+
+        // El Avión
+        const plane = {
+            x: 100,
+            y: canvas.height / 2,
+            width: 40,
+            height: 20,
+            color: 'red',
+            dy: 0,
+            speed: 5
+        };
+
+        // Obstáculos
+        const obstacles = [];
+        const obstacleWidth = 50;
+        const obstacleGap = 200; // Espacio entre torre de arriba y abajo
+
+        // Controles
+        const keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            w: false,
+            s: false
+        };
+
+        document.addEventListener('keydown', (e) => {
+            if(keys.hasOwnProperty(e.key)) keys[e.key] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if(keys.hasOwnProperty(e.key)) keys[e.key] = false;
+        });
+
+        function spawnObstacle() {
+            // Altura aleatoria para la torre de arriba
+            const minHeight = 50;
+            const maxHeight = canvas.height - obstacleGap - minHeight;
+            const topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1) + minHeight);
+
+            obstacles.push({
+                x: canvas.width,
+                topHeight: topHeight,
+                bottomY: topHeight + obstacleGap,
+                passed: false
+            });
+        }
+
+        function drawPlane() {
+            ctx.fillStyle = plane.color;
+            // Cuerpo del avión
+            ctx.fillRect(plane.x, plane.y, plane.width, plane.height);
+            // Cola
+            ctx.fillRect(plane.x - 10, plane.y - 10, 15, 20);
+            // Ala
+            ctx.fillRect(plane.x + 10, plane.y - 5, 10, 30);
+            
+            // Hélice (detalle visual simple)
+            ctx.fillStyle = 'black';
+            if (frame % 10 < 5) {
+                ctx.fillRect(plane.x + plane.width, plane.y + 5, 5, 10);
+            } else {
+                ctx.fillRect(plane.x + plane.width, plane.y + 2, 5, 16);
+            }
+        }
+
+        function drawObstacles() {
+            ctx.fillStyle = '#555'; // Color gris edificio
+            obstacles.forEach(obs => {
+                // Torre de arriba
+                ctx.fillRect(obs.x, 0, obstacleWidth, obs.topHeight);
+                // Torre de abajo
+                ctx.fillRect(obs.x, obs.bottomY, obstacleWidth, canvas.height - obs.bottomY);
+                
+                // Ventanas (detalle visual)
+                ctx.fillStyle = 'yellow';
+                for(let i=10; i < obs.topHeight; i+=40) ctx.fillRect(obs.x + 10, i, 10, 10);
+                for(let i=obs.bottomY + 10; i < canvas.height; i+=40) ctx.fillRect(obs.x + 20, i, 10, 10);
+                ctx.fillStyle = '#555'; // Reset color
+            });
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            // Limpiar canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Mover avión
+            if (keys.ArrowUp || keys.w) plane.y -= plane.speed;
+            if (keys.ArrowDown || keys.s) plane.y += plane.speed;
+
+            // Gravedad simulada (opcional, aquí es vuelo controlado directo)
+            // plane.y += 1; 
+
+            // Límites de pantalla
+            if (plane.y < 0) plane.y = 0;
+            if (plane.y + plane.height > canvas.height) gameOver();
+
+            drawPlane();
+
+            // Gestionar obstáculos
+            if (frame % 120 === 0) spawnObstacle(); // Generar cada 120 frames
+
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.x -= speed;
+
+                // Colisiones
+                // 1. Chocar con torre de arriba
+                if (plane.x < obs.x + obstacleWidth &&
+                    plane.x + plane.width > obs.x &&
+                    plane.y < obs.topHeight) {
+                    gameOver();
+                }
+                // 2. Chocar con torre de abajo
+                if (plane.x < obs.x + obstacleWidth &&
+                    plane.x + plane.width > obs.x &&
+                    plane.y + plane.height > obs.bottomY) {
+                    gameOver();
+                }
+
+                // Puntaje
+                if (obs.x + obstacleWidth < plane.x && !obs.passed) {
+                    score++;
+                    document.getElementById('scoreVal').innerText = score;
+                    obs.passed = true;
+                    // Aumentar dificultad levemente
+                    if(score % 5 === 0) speed += 0.5;
+                }
+            }
+
+            // Eliminar obstáculos fuera de pantalla
+            if (obstacles.length > 0 && obstacles[0].x < -obstacleWidth) {
+                obstacles.shift();
+            }
+
+            drawObstacles();
+
+            frame++;
+            requestAnimationFrame(update);
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('gameOverScreen').style.display = 'block';
+            document.getElementById('finalScore').innerText = score;
+        }
+
+        function resetGame() {
+            plane.y = canvas.height / 2;
+            obstacles.length = 0;
+            score = 0;
+            frame = 0;
+            speed = 5;
+            document.getElementById('scoreVal').innerText = '0';
+            document.getElementById('gameOverScreen').style.display = 'none';
+            gameRunning = true;
+            update();
+        }
+
+        // Iniciar
+        update();
+
+    </script>
+</body>
+</html>

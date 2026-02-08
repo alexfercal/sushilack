@@ -4,13 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SushiLack | Juegos por SpaceComander</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        /* --- Estilos Generales y Tema Espacial --- */
+        /* --- ESTILOS GENERALES --- */
         :root {
             --primary-color: #00d2ff; /* Azul Neón */
             --secondary-color: #3a7bd5;
-            --accent-color: #ff2e63; /* Rojo/Rosado Neón para contraste */
-            --bg-color: #0f1016; /* Negro Espacial */
+            --accent-color: #ff2e63; /* Rojo Neón */
+            --youtube-color: #ff0000;
+            --bg-color: #0f1016;
             --card-bg: #1a1c29;
             --text-color: #ffffff;
         }
@@ -22,46 +26,25 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /*
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            background-image: radial-gradient(circle at 50% 50%, #1f2233 0%, #0f1016 100%);
-            min-height: 100vh;
-        }
-        */
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
             min-height: 100vh;
-            
-            /* --- INICIO DEL CAMBIO --- */
-            
-            /* Aquí cargamos la imagen y le ponemos una "capa" oscura encima */
+            /* Imagen de fondo con filtro oscuro */
             background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('fondo-espacio.png');
-            
-            /* Esto hace que la imagen cubra toda la pantalla sin deformarse */
             background-size: cover;
-            
-            /* Centra la imagen */
             background-position: center;
-            
-            /* Efecto MÁGICO: La imagen se queda quieta mientras haces scroll (Parallax) */
             background-attachment: fixed;
-            
-            /* Evita que la imagen se repita como mosaico */
             background-repeat: no-repeat;
-            
-            /* --- FIN DEL CAMBIO --- */
         }
 
-        /* --- Header y Navegación --- */
+        /* --- HEADER --- */
         header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 20px 5%;
-            background: rgba(26, 28, 41, 0.9);
+            background: rgba(26, 28, 41, 0.95);
             backdrop-filter: blur(10px);
             border-bottom: 2px solid var(--secondary-color);
             position: sticky;
@@ -95,6 +78,12 @@
             -webkit-text-fill-color: transparent;
         }
 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
         .creator-tag {
             background-color: var(--accent-color);
             padding: 5px 15px;
@@ -104,7 +93,28 @@
             box-shadow: 0 0 10px rgba(255, 46, 99, 0.5);
         }
 
-        /* --- Sección Hero --- */
+        .youtube-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background-color: rgba(255, 0, 0, 0.1);
+            color: white;
+            text-decoration: none;
+            padding: 6px 16px;
+            border: 1px solid var(--youtube-color);
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .youtube-btn:hover {
+            background-color: var(--youtube-color);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+            transform: scale(1.05);
+        }
+
+        /* --- HERO --- */
         .hero {
             text-align: center;
             padding: 60px 20px;
@@ -113,16 +123,17 @@
         .hero h1 {
             font-size: 3rem;
             margin-bottom: 10px;
+            text-shadow: 0 0 20px var(--primary-color);
         }
 
         .hero p {
             font-size: 1.2rem;
-            color: #a0a0a0;
+            color: #ccc;
             max-width: 600px;
             margin: 0 auto;
         }
 
-        /* --- Grid de Juegos --- */
+        /* --- GRID DE JUEGOS --- */
         .games-container {
             max-width: 1200px;
             margin: 0 auto;
@@ -140,6 +151,7 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
             flex-direction: column;
+            position: relative;
         }
 
         .game-card:hover {
@@ -148,15 +160,14 @@
             border-color: var(--primary-color);
         }
 
-        /* Placeholder visual para la miniatura del juego */
         .game-thumbnail {
-            height: 180px;
-            background: linear-gradient(45deg, #2b32b2, #1488cc);
+            height: 150px;
+            background: linear-gradient(135deg, #1e2336 0%, #0f1016 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: rgba(255,255,255,0.2);
             font-size: 4rem;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
         .game-info {
@@ -173,8 +184,8 @@
         }
 
         .game-desc {
-            font-size: 0.95rem;
-            color: #ccc;
+            font-size: 0.9rem;
+            color: #aaa;
             margin-bottom: 20px;
             line-height: 1.5;
             flex-grow: 1;
@@ -199,19 +210,20 @@
             box-shadow: 0 0 15px var(--primary-color);
         }
 
-        /* --- Footer --- */
+        /* --- FOOTER --- */
         footer {
             text-align: center;
             padding: 40px;
             margin-top: 40px;
+            background: rgba(0,0,0,0.5);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             color: #777;
         }
 
-        /* Ajuste para móviles */
         @media (max-width: 600px) {
             .hero h1 { font-size: 2rem; }
-            header { flex-direction: column; gap: 10px; }
+            header { flex-direction: column; gap: 15px; }
+            .header-right { flex-direction: column; width: 100%; }
         }
     </style>
 </head>
@@ -222,24 +234,32 @@
             <img src="logo.png" alt="Logo SpaceComander" class="logo-img">
             <span class="site-name">SushiLack</span>
         </div>
-        <div class="creator-tag">By SpaceComander</div>
+        
+        <div class="header-right">
+            <a href="https://www.youtube.com/@SpaceComander/shorts" target="_blank" class="youtube-btn">
+                <i class="fab fa-youtube"></i> Mi Canal
+            </a>
+            <a href="https://www.youtube.com/@SpaceComanderPlus/shorts" target="_blank" class="youtube-btn">
+                <i class="fab fa-youtube"></i> Mi Canal Secundario
+            </a>
+            
+            <div class="creator-tag">By SpaceComander</div>
+        </div>
     </header>
 
     <div class="hero">
-        <h1>Centro de Comando Gamer</h1>
-        <p>Explora el universo de minijuegos creados con HTML5, CSS y JS puro. <br>Desarrollado y curado por SpaceComander.</p>
+        <h1>Centro de Comando Gamer (Beta)</h1>
+        <p>Explora el universo de minijuegos creados con IA y HTML5 puro. <br>Desarrollado y Testeado por SpaceComander.</p>
     </div>
 
     <div class="games-container">
 
         <article class="game-card">
-            <div class="game-thumbnail">🚀</div>
+            <div class="game-thumbnail">🌳</div>
             <div class="game-info">
                 <h3 class="game-title">Minecrafting</h3>
-                <p class="game-desc">
-                    Minecrafting es un videojuego de mundo abierto tipo sandbox donde la creatividad es tu única herramienta. Al igual que en el clásico Minecraft, el juego se basa en la interacción con un entorno compuesto enteramente por cubos en 3D que representan diferentes materiales: tierra, piedra, madera y minerales preciosos.
-                </p>
-                <a href="minecraft.html" class="play-btn">JUGAR AHORA</a>
+                <p class="game-desc">Mundo abierto tipo sandbox. Construye con bloques en 3D.</p>
+                <a href="minecraft.html" class="play-btn">JUGAR</a>
             </div>
         </article>
 
@@ -247,21 +267,89 @@
             <div class="game-thumbnail">🟦</div>
             <div class="game-info">
                 <h3 class="game-title">GeoDash</h3>
-                <p class="game-desc">
-                    Pon a prueba tus reflejos. Un juego de plataformas rítmico donde debes saltar obstáculos geométricos a toda velocidad. ¿Podrás llegar al final?
-                </p>
-                <a href="geodash1.html" class="play-btn">JUGAR AHORA</a>
+                <p class="game-desc">Plataformas rítmico. Salta obstáculos a toda velocidad.</p>
+                <a href="geodash1.html" class="play-btn">JUGAR</a>
             </div>
         </article>
 
         <article class="game-card">
-            <div class="game-thumbnail">🐍</div>
+            <div class="game-thumbnail">🌊</div>
             <div class="game-info">
-                <h3 class="game-title">The disasters</h3>
-                <p class="game-desc">
-                    The Disasters es un juego de plataformas de alta intensidad donde la precisión en el salto se mezcla con la supervivencia extrema. A diferencia de los plataformas tradicionales donde los obstáculos son fijos, aquí los niveles se transforman en tiempo real debido a catástrofes climáticas y geológicas.
-                </p>
-                <a href="natural_disasters.html" class="play-btn">JUGAR AHORA</a>
+                <h3 class="game-title">The Disasters</h3>
+                <p class="game-desc">Sobrevive a catástrofes naturales en este plataformas extremo.</p>
+                <a href="natural_disasters.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">🟪</div>
+            <div class="game-info">
+                <h3 class="game-title">GeoDash 2</h3>
+                <p class="game-desc">Plataformas rítmico, pero esta vez con plataformas. Salta obstáculos a toda velocidad.</p>
+                <a href="GEoDashhhhh.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">💣</div>
+            <div class="game-info">
+                <h3 class="game-title">Nelon Sandbox</h3>
+                <p class="game-desc">En este juego simularas bombas y más.</p>
+                <a href="PelonSandbox.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">💀</div>
+            <div class="game-info">
+                <h3 class="game-title">Abandoned Toy Factory</h3>
+                <p class="game-desc">En este Juego hay que buscar 3 cosas, o si no Red Monster te comera.</p>
+                <a href="abandoned toy factory.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">🌑</div>
+            <div class="game-info">
+                <h3 class="game-title">Moon Lander</h3>
+                <p class="game-desc">Aterriza suavemente en la luna controlando la gravedad.</p>
+                <a href="otro.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">🟨</div>
+            <div class="game-info">
+                <h3 class="game-title">GeoDash 3</h3>
+                <p class="game-desc">Plataformas rítmico, pero esta ves con portales de avion. Salta obstáculos a toda velocidad.</p>
+                <a href="geodash3.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">🛩️</div>
+            <div class="game-info">
+                <h3 class="game-title">Crazy Plane</h3>
+                <p class="game-desc">Vuela sin tocar las paredes.</p>
+                <a href="Plane.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">🌻</div>
+            <div class="game-info">
+                <h3 class="game-title">PvZ</h3>
+                <p class="game-desc">divierte con plantas y zombis.</p>
+                <a href="plants vs zombies.html" class="play-btn">JUGAR</a>
+            </div>
+        </article>
+
+        <article class="game-card">
+            <div class="game-thumbnail">🟩</div>
+            <div class="game-info">
+                <h3 class="game-title">GeoDash 4</h3>
+                <p class="game-desc">Plataformas rítmico, pero esta vez con portales de arriba y abajo. Salta obstáculos a toda velocidad.</p>
+                <a href="geodash4.html" class="play-btn">JUGAR</a>
             </div>
         </article>
 

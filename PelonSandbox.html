@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Physics Sandbox</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: #1a1a2e;
+            cursor: crosshair;
+        }
+
+        #toolbar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            max-width: 200px;
+        }
+
+        .tool-button {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #667eea;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .tool-button:hover {
+            background: #764ba2;
+            transform: scale(1.05);
+        }
+
+        .tool-button.active {
+            background: #f39c12;
+            box-shadow: 0 0 10px #f39c12;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+        }
+
+        .control-button {
+            padding: 10px 15px;
+            margin: 5px;
+            background: #e74c3c;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .control-button:hover {
+            background: #c0392b;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            max-width: 250px;
+            font-size: 12px;
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="toolbar">
+        <h3 style="margin-bottom: 10px;">🎮 Herramientas</h3>
+        <button class="tool-button active" data-tool="ragdoll">👤 Ragdoll</button>
+        <button class="tool-button" data-tool="box">📦 Caja</button>
+        <button class="tool-button" data-tool="circle">⚽ Círculo</button>
+        <button class="tool-button" data-tool="explosive">💣 Explosivo</button>
+        <button class="tool-button" data-tool="spike">⚠️ Pincho</button>
+        <button class="tool-button" data-tool="grab">✋ Agarrar</button>
+        
+        <div class="slider-container">
+            <label>Gravedad: <span id="gravityValue">0.5</span></label>
+            <input type="range" id="gravitySlider" min="0" max="2" step="0.1" value="0.5">
+        </div>
+    </div>
+
+    <div id="controls">
+        <button class="control-button" id="clearBtn">🗑️ Limpiar Todo</button>
+        <button class="control-button" id="pauseBtn">⏸️ Pausar</button>
+    </div>
+
+    <div id="info">
+        <h3>ℹ️ Instrucciones</h3>
+        <p>• Click para crear objetos</p>
+        <p>• Arrastra con "Agarrar"</p>
+        <p>• Los ragdolls tienen física realista</p>
+        <p>• Los explosivos estallan al tocarlos</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let currentTool = 'ragdoll';
+        let objects = [];
+        let gravity = 0.5;
+        let isPaused = false;
+        let selectedObject = null;
+        let mouseX = 0;
+        let mouseY = 0;
+        let isMouseDown = false;
+
+        class PhysicsObject {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.vx = 0;
+                this.vy = 0;
+                this.type = type;
+                this.rotation = 0;
+                this.angularVelocity = 0;
+            }
+
+            update() {
+                if (isPaused) return;
+                
+                this.vy += gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.rotation += this.angularVelocity;
+                
+                this.vx *= 0.99;
+                this.angularVelocity *= 0.98;
+
+                // Colisión con el suelo
+                if (this.y > canvas.height - this.getSize()) {
+                    this.y = canvas.height - this.getSize();
+                    this.vy *= -0.6;
+                    this.vx *= 0.8;
+                    if (Math.abs(this.vy) < 0.5) this.vy = 0;
+                }
+
+                // Colisión con paredes
+                if (this.x < this.getSize()) {
+                    this.x = this.getSize();
+                    this.vx *= -0.6;
+                } else if (this.x > canvas.width - this.getSize()) {
+                    this.x = canvas.width - this.getSize();
+                    this.vx *= -0.6;
+                }
+
+                // Colisión con techo
+                if (this.y < this.getSize()) {
+                    this.y = this.getSize();
+                    this.vy *= -0.6;
+                }
+            }
+
+            getSize() {
+                if (this.type === 'box') return 25;
+                if (this.type === 'circle') return 20;
+                if (this.type === 'explosive') return 15;
+                if (this.type === 'spike') return 20;
+                return 30;
+            }
+        }
+
+        class Ragdoll extends PhysicsObject {
+            constructor(x, y) {
+                super(x, y, 'ragdoll');
+                this.headRadius = 15;
+                this.bodyHeight = 40;
+                this.limbLength = 30;
+                this.health = 100;
+                this.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+                
+                this.joints = {
+                    head: { x: 0, y: -30 },
+                    body: { x: 0, y: 0 },
+                    leftArm: { x: -15, y: -10, angle: 0 },
+                    rightArm: { x: 15, y: -10, angle: 0 },
+                    leftLeg: { x: -10, y: 20, angle: 0 },
+                    rightLeg: { x: 10, y: 20, angle: 0 }
+                };
+            }
+
+            update() {
+                super.update();
+                
+                // Animación de extremidades
+                this.joints.leftArm.angle = Math.sin(Date.now() * 0.003) * 0.5 + this.rotation;
+                this.joints.rightArm.angle = Math.sin(Date.now() * 0.003 + Math.PI) * 0.5 + this.rotation;
+                this.joints.leftLeg.angle = Math.sin(Date.now() * 0.002) * 0.3 + this.rotation;
+                this.joints.rightLeg.angle = Math.sin(Date.now() * 0.002 + Math.PI) * 0.3 + this.rotation;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                // Cuerpo
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-10, -20, 20, 40);
+
+                // Cabeza
+                ctx.beginPath();
+                ctx.arc(this.joints.head.x, this.joints.head.y, this.headRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Cara
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(-5, -33, 3, 0, Math.PI * 2);
+                ctx.arc(5, -33, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(0, -25, 5, 0, Math.PI);
+                ctx.stroke();
+
+                // Extremidades
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 8;
+                ctx.lineCap = 'round';
+
+                // Brazos
+                this.drawLimb(this.joints.leftArm.x, this.joints.leftArm.y, this.joints.leftArm.angle, this.limbLength);
+                this.drawLimb(this.joints.rightArm.x, this.joints.rightArm.y, this.joints.rightArm.angle, this.limbLength);
+
+                // Piernas
+                this.drawLimb(this.joints.leftLeg.x, this.joints.leftLeg.y, this.joints.leftLeg.angle, this.limbLength);
+                this.drawLimb(this.joints.rightLeg.x, this.joints.rightLeg.y, this.joints.rightLeg.angle, this.limbLength);
+
+                ctx.restore();
+            }
+
+            drawLimb(startX, startY, angle, length) {
+                ctx.save();
+                ctx.translate(startX, startY);
+                ctx.rotate(angle);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, length);
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            getSize() {
+                return 50;
+            }
+        }
+
+        class Box extends PhysicsObject {
+            constructor(x, y) {
+                super(x, y, 'box');
+                this.size = 40;
+                this.color = '#8B4513';
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-this.size/2, -this.size/2, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        class Circle extends PhysicsObject {
+            constructor(x, y) {
+                super(x, y, 'circle');
+                this.radius = 25;
+                this.color = '#3498db';
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.strokeStyle = '#2980b9';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        class Explosive extends PhysicsObject {
+            constructor(x, y) {
+                super(x, y, 'explosive');
+                this.radius = 20;
+                this.fuseTime = 3000;
+                this.createTime = Date.now();
+                this.exploded = false;
+            }
+
+            update() {
+                super.update();
+                
+                if (Date.now() - this.createTime > this.fuseTime && !this.exploded) {
+                    this.explode();
+                }
+            }
+
+            explode() {
+                this.exploded = true;
+                
+                // Crear efecto de explosión
+                for (let i = 0; i < 20; i++) {
+                    const particle = {
+                        x: this.x,
+                        y: this.y,
+                        vx: (Math.random() - 0.5) * 20,
+                        vy: (Math.random() - 0.5) * 20,
+                        life: 30,
+                        color: `hsl(${Math.random() * 60 + 10}, 100%, 50%)`
+                    };
+                    particles.push(particle);
+                }
+
+                // Afectar objetos cercanos
+                objects.forEach(obj => {
+                    if (obj === this) return;
+                    const dx = obj.x - this.x;
+                    const dy = obj.y - this.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 150) {
+                        const force = (150 - dist) / 150 * 15;
+                        obj.vx += (dx / dist) * force;
+                        obj.vy += (dy / dist) * force;
+                        obj.angularVelocity += (Math.random() - 0.5) * 0.3;
+                    }
+                });
+
+                objects = objects.filter(obj => obj !== this);
+            }
+
+            draw() {
+                if (this.exploded) return;
+                
+                const timeLeft = this.fuseTime - (Date.now() - this.createTime);
+                const blinkSpeed = Math.max(100, timeLeft / 3);
+                const shouldBlink = Math.floor(Date.now() / blinkSpeed) % 2 === 0;
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = shouldBlink ? '#e74c3c' : '#c0392b';
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Mecha
+                ctx.strokeStyle = '#f39c12';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y - this.radius);
+                ctx.lineTo(this.x, this.y - this.radius - 10);
+                ctx.stroke();
+            }
+        }
+
+        class Spike extends PhysicsObject {
+            constructor(x, y) {
+                super(x, y, 'spike');
+                this.size = 30;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                
+                // Base
+                ctx.fillStyle = '#95a5a6';
+                ctx.fillRect(-this.size/2, -5, this.size, 10);
+                
+                // Pinchos
+                ctx.fillStyle = '#7f8c8d';
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size/2 + i * this.size/2, 0);
+                    ctx.lineTo(-this.size/2 + i * this.size/2 + this.size/6, -15);
+                    ctx.lineTo(-this.size/2 + i * this.size/2 + this.size/3, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+
+            update() {
+                super.update();
+                
+                // Dañar ragdolls cercanos
+                objects.forEach(obj => {
+                    if (obj.type === 'ragdoll') {
+                        const dx = obj.x - this.x;
+                        const dy = obj.y - this.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < 40) {
+                            obj.vx += (Math.random() - 0.5) * 2;
+                            obj.vy -= 5;
+                        }
+                    }
+                });
+            }
+        }
+
+        let particles = [];
+
+        function updateParticles() {
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.3;
+                p.life--;
+                return p.life > 0;
+            });
+        }
+
+        function drawParticles() {
+            particles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 30;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            });
+        }
+
+        // Event Listeners
+        canvas.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            if (currentTool === 'grab') {
+                // Buscar objeto cercano
+                for (let obj of objects) {
+                    const dx = obj.x - mouseX;
+                    const dy = obj.y - mouseY;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < obj.getSize()) {
+                        selectedObject = obj;
+                        break;
+                    }
+                }
+            } else {
+                createObject(mouseX, mouseY);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            if (selectedObject && isMouseDown) {
+                selectedObject.x = mouseX;
+                selectedObject.y = mouseY;
+                selectedObject.vx = 0;
+                selectedObject.vy = 0;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            selectedObject = null;
+        });
+
+        function createObject(x, y) {
+            let obj;
+            switch (currentTool) {
+                case 'ragdoll':
+                    obj = new Ragdoll(x, y);
+                    break;
+                case 'box':
+                    obj = new Box(x, y);
+                    break;
+                case 'circle':
+                    obj = new Circle(x, y);
+                    break;
+                case 'explosive':
+                    obj = new Explosive(x, y);
+                    break;
+                case 'spike':
+                    obj = new Spike(x, y);
+                    break;
+            }
+            
+            if (obj) objects.push(obj);
+        }
+
+        // Toolbar buttons
+        document.querySelectorAll('.tool-button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tool-button').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentTool = btn.dataset.tool;
+            });
+        });
+
+        // Control buttons
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            objects = [];
+            particles = [];
+        });
+
+        document.getElementById('pauseBtn').addEventListener('click', (e) => {
+            isPaused = !isPaused;
+            e.target.textContent = isPaused ? '▶️ Reanudar' : '⏸️ Pausar';
+        });
+
+        // Gravity slider
+        const gravitySlider = document.getElementById('gravitySlider');
+        const gravityValue = document.getElementById('gravityValue');
+        gravitySlider.addEventListener('input', (e) => {
+            gravity = parseFloat(e.target.value);
+            gravityValue.textContent = gravity.toFixed(1);
+        });
+
+        // Game loop
+        function gameLoop() {
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Actualizar y dibujar objetos
+            objects.forEach(obj => {
+                obj.update();
+                obj.draw();
+            });
+
+            updateParticles();
+            drawParticles();
+
+            // Colisiones simples entre objetos
+            for (let i = 0; i < objects.length; i++) {
+                for (let j = i + 1; j < objects.length; j++) {
+                    const obj1 = objects[i];
+                    const obj2 = objects[j];
+                    
+                    const dx = obj2.x - obj1.x;
+                    const dy = obj2.y - obj1.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = obj1.getSize() + obj2.getSize();
+                    
+                    if (dist < minDist) {
+                        const angle = Math.atan2(dy, dx);
+                        const overlap = minDist - dist;
+                        
+                        obj1.x -= Math.cos(angle) * overlap / 2;
+                        obj1.y -= Math.sin(angle) * overlap / 2;
+                        obj2.x += Math.cos(angle) * overlap / 2;
+                        obj2.y += Math.sin(angle) * overlap / 2;
+                        
+                        const relVx = obj2.vx - obj1.vx;
+                        const relVy = obj2.vy - obj1.vy;
+                        
+                        obj1.vx += relVx * 0.5;
+                        obj1.vy += relVy * 0.5;
+                        obj2.vx -= relVx * 0.5;
+                        obj2.vy -= relVy * 0.5;
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Iniciar el juego
+        gameLoop();
+
+        // Crear algunos objetos iniciales
+        objects.push(new Ragdoll(300, 200));
+        objects.push(new Box(500, 200));
+        objects.push(new Circle(700, 200));
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Abandoned Toy Factory - Final Chapter</title>
+  <style>
+    :root {
+      --cursor-x: 50%;
+      --cursor-y: 50%;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      height: 100vh;
+      background: #000;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    #screen {
+      width: 100%;
+      height: 100%;
+      background: #050505;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* --- HUD & UI --- */
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      display: flex;
+      justify-content: space-between;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hud-group { display: flex; gap: 20px; }
+
+    .meter-box {
+      background: rgba(10, 10, 10, 0.8);
+      border: 1px solid #333;
+      padding: 10px;
+      border-radius: 6px;
+      width: 180px;
+      backdrop-filter: blur(4px);
+    }
+
+    .meter-label { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 5px; color: #aaa; }
+    .meter-bar { height: 8px; background: #222; border-radius: 4px; overflow: hidden; }
+    .meter-fill { height: 100%; width: 50%; transition: width 0.3s ease, background 0.3s; }
+    
+    #fear-fill { background: linear-gradient(90deg, #8b0000, #ff0000); width: 0%; }
+    #battery-fill { background: linear-gradient(90deg, #2E7D32, #4CAF50); width: 100%; }
+
+    #inventory {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+
+    .item-slot {
+      width: 60px;
+      height: 60px;
+      background: rgba(20, 20, 20, 0.9);
+      border: 2px solid #444;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      opacity: 0.3;
+      transition: all 0.3s;
+    }
+
+    .item-slot.acquired {
+      opacity: 1;
+      border-color: #FFD700;
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      animation: pop 0.3s ease-out;
+    }
+
+    /* --- ATMOSPHERE LAYERS --- */
+    #darkness-layer {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        circle 250px at var(--cursor-x) var(--cursor-y), 
+        rgba(0,0,0,0) 0%, 
+        rgba(0,0,0,0.85) 40%, 
+        rgba(0,0,0,0.98) 100%
+      );
+      z-index: 5;
+      transition: background 0.1s;
+      pointer-events: none;
+    }
+
+    #darkness-layer.lights-off {
+      background: rgba(0,0,0,0.98);
+    }
+
+    .scanlines {
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.2) 2px, transparent 4px);
+      z-index: 8;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    #red-vignette {
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 100px rgba(255,0,0,0);
+      z-index: 6;
+      pointer-events: none;
+      transition: box-shadow 0.5s;
+    }
+
+    /* --- ENEMIES & JUMPSCARES --- */
+    #jumpscare-overlay {
+      position: absolute;
+      inset: 0;
+      background: black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.1s;
+    }
+    
+    #jumpscare-overlay.active { opacity: 1; }
+    
+    .monster-face {
+      width: 300px;
+      height: 400px;
+      background: radial-gradient(circle, #300 0%, #000 70%);
+      border-radius: 50%;
+      position: relative;
+      animation: shake 0.1s infinite;
+      box-shadow: 0 0 50px red;
+    }
+
+    .eye {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      background: #fff;
+      border-radius: 50%;
+      top: 30%;
+      box-shadow: 0 0 20px #fff;
+    }
+    .eye.left { left: 20%; }
+    .eye.right { right: 20%; }
+    .pupil { width: 10px; height: 10px; background: #000; border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    .mouth {
+      position: absolute;
+      bottom: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 150px;
+      height: 100px;
+      background: #000;
+      border-radius: 50% 50% 0 0;
+      border: 5px solid #500;
+      overflow: hidden;
+    }
+    .teeth {
+      width: 0; height: 0; border-left: 10px solid transparent; border-right: 10px solid transparent; border-top: 20px solid #fff;
+      display: inline-block;
+    }
+
+    /* --- MENUS --- */
+    #menu-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.95);
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    h1 { 
+      font-size: 4rem; 
+      color: #c00; 
+      text-shadow: 0 0 20px #f00; 
+      font-family: 'Courier New', Courier, monospace;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      padding: 15px 40px;
+      background: transparent;
+      border: 2px solid #c00;
+      color: #c00;
+      font-size: 1.5rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: 0.2s;
+      margin-top: 20px;
+    }
+    .btn:hover { background: #c00; color: #000; box-shadow: 0 0 30px #c00; }
+
+    #log-container {
+      position: absolute;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      text-align: center;
+      z-index: 9;
+      pointer-events: none;
+    }
+
+    .log-msg {
+      font-size: 1.2rem;
+      margin-top: 5px;
+      text-shadow: 1px 1px 2px black;
+      opacity: 0;
+      animation: fadeUp 3s forwards;
+    }
+
+    @keyframes fadeUp {
+      0% { opacity: 0; transform: translateY(20px); }
+      10% { opacity: 1; transform: translateY(0); }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    @keyframes shake {
+      0% { transform: translate(1px, 1px) rotate(0deg); }
+      50% { transform: translate(-1px, -2px) rotate(-1deg); }
+      100% { transform: translate(-3px, 0px) rotate(1deg); }
+    }
+    
+    @keyframes pop {
+      50% { transform: scale(1.2); }
+    }
+  </style>
+</head>
+<body>
+
+<div id="screen">
+  <div id="darkness-layer" class="lights-off"></div>
+  <div class="scanlines"></div>
+  <div id="red-vignette"></div>
+
+  <div id="hud">
+    <div class="hud-group">
+      <div class="meter-box">
+        <div class="meter-label"><span>MIEDO</span><span id="fear-txt">0%</span></div>
+        <div class="meter-bar"><div id="fear-fill" class="meter-fill"></div></div>
+      </div>
+      <div class="meter-box">
+        <div class="meter-label"><span>BATERÍA</span><span id="batt-txt">100%</span></div>
+        <div class="meter-bar"><div id="battery-fill" class="meter-fill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="log-container"></div>
+
+  <div id="inventory">
+    <div class="item-slot" id="slot-key">🔑</div>
+    <div class="item-slot" id="slot-note">📄</div>
+    <div class="item-slot" id="slot-tool">✂️</div>
+  </div>
+
+  <div id="jumpscare-overlay">
+    <div class="monster-face">
+      <div class="eye left"><div class="pupil"></div></div>
+      <div class="eye right"><div class="pupil"></div></div>
+      <div class="mouth">
+        <div class="teeth"></div><div class="teeth"></div><div class="teeth"></div><div class="teeth"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu-overlay">
+    <h1>TOY FACTORY</h1>
+    <p style="max-width: 600px; line-height: 1.6; color: #aaa;">
+      Estás atrapado. Encuentra 3 objetos para escapar.<br>
+      Usa el <strong>Mouse</strong> para mover la linterna.<br>
+      <strong>Click</strong> para buscar objetos.<br>
+      Mantén <strong>F</strong> pulsado para apagar la luz y recargar (aumenta el miedo).<br>
+      Si el miedo llega al 100% o la batería a 0% con enemigos cerca... se acabó.
+    </p>
+    <button class="btn" onclick="Game.start()">ENTRAR</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// SISTEMA DE AUDIO SINTETIZADO (WEB AUDIO API)
+// No requiere archivos externos.
+// ════════════════════════════════════════════════════════════════
+const AudioSys = {
+  ctx: null,
+  init: function() {
+    window.AudioContext = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AudioContext();
+  },
+  playTone: function(freq, type, duration, vol = 0.1) {
+    if(!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + duration);
+  },
+  playNoise: function(duration) {
+    if(!this.ctx) return;
+    const bufferSize = this.ctx.sampleRate * duration;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.05;
+    noise.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start();
+  },
+  heartbeat: function(rate) {
+    // Sonido grave de latido
+    this.playTone(60, 'sine', 0.1, 0.5);
+    setTimeout(() => this.playTone(50, 'sine', 0.1, 0.4), 150);
+  },
+  jumpscare: function() {
+    this.playTone(800, 'sawtooth', 0.5, 0.8);
+    this.playTone(1200, 'square', 0.6, 0.6);
+    this.playNoise(0.5);
+  },
+  itemFound: function() {
+    this.playTone(1500, 'sine', 0.5, 0.1);
+    setTimeout(() => this.playTone(2000, 'sine', 0.5, 0.1), 100);
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// LOGICA DEL JUEGO
+// ════════════════════════════════════════════════════════════════
+const Game = {
+  state: {
+    fear: 0,
+    battery: 100,
+    items: { key: false, note: false, tool: false },
+    flashlightOn: true,
+    running: false,
+    lastHeartbeat: 0
+  },
+  config: {
+    drainRate: 0.15,
+    rechargeRate: 0.4,
+    fearRateLight: 0.02,
+    fearRateDark: 0.2,
+    heartbeatBase: 1000
+  },
+
+  start: function() {
+    AudioSys.init();
+    document.getElementById('menu-overlay').style.display = 'none';
+    this.reset();
+    this.state.running = true;
+    this.loop();
+    this.inputListeners();
+    this.log("Has entrado. Encuentra las 3 piezas.");
+    AudioSys.playTone(100, 'sine', 2); // Sonido ambiente inicio
+  },
+
+  reset: function() {
+    this.state = {
+      fear: 0,
+      battery: 100,
+      items: { key: false, note: false, tool: false },
+      flashlightOn: true,
+      running: false,
+      lastHeartbeat: 0
+    };
+    this.updateUI();
+    document.querySelectorAll('.item-slot').forEach(el => el.classList.remove('acquired'));
+    document.getElementById('jumpscare-overlay').classList.remove('active');
+  },
+
+  inputListeners: function() {
+    document.addEventListener('mousemove', (e) => {
+      const x = (e.clientX / window.innerWidth) * 100;
+      const y = (e.clientY / window.innerHeight) * 100;
+      document.documentElement.style.setProperty('--cursor-x', `${x}%`);
+      document.documentElement.style.setProperty('--cursor-y', `${y}%`);
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyF') {
+        this.toggleFlashlight(false); // Apagar
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyF') {
+        this.toggleFlashlight(true); // Encender
+      }
+    });
+
+    document.addEventListener('click', () => {
+      if (!this.state.running) return;
+      this.exploreArea();
+    });
+  },
+
+  toggleFlashlight: function(isOn) {
+    this.state.flashlightOn = isOn;
+    const layer = document.getElementById('darkness-layer');
+    if (isOn) {
+      layer.classList.remove('lights-off');
+      AudioSys.playTone(400, 'square', 0.05, 0.05); // Click on
+    } else {
+      layer.classList.add('lights-off');
+      AudioSys.playTone(200, 'square', 0.05, 0.05); // Click off
+    }
+  },
+
+  exploreArea: function() {
+    if (!this.state.flashlightOn) {
+      this.log("Está demasiado oscuro para buscar...");
+      return;
+    }
+
+    // Probabilidad de evento
+    const rand = Math.random();
+
+    // 1. Encontrar objeto (si no lo tienes)
+    if (rand < 0.25) {
+      this.findItem();
+    } 
+    // 2. Evento de miedo (ruido, susto menor)
+    else if (rand > 0.7) {
+      this.triggerFearEvent();
+    } 
+    // 3. Nada
+    else {
+      const msgs = ["Nada por aquí...", "Solo basura vieja.", "Escuché algo...", "Polvo y telarañas."];
+      this.log(msgs[Math.floor(Math.random() * msgs.length)]);
+    }
+  },
+
+  findItem: function() {
+    const needed = Object.keys(this.state.items).filter(k => !this.state.items[k]);
+    if (needed.length === 0) {
+      this.log("¡Ya tienes todo! ¡Pulsa ESC para salir (simulado)!");
+      this.winGame();
+      return;
+    }
+
+    const itemKey = needed[Math.floor(Math.random() * needed.length)];
+    this.state.items[itemKey] = true;
+    
+    document.getElementById(`slot-${itemKey}`).classList.add('acquired');
+    AudioSys.itemFound();
+    
+    const names = { key: "Llave Oxidada", note: "Nota de Guardia", tool: "Cizalla" };
+    this.log(`¡Encontraste: ${names[itemKey]}!`);
+    
+    // Check win instantáneo para demo
+    if (Object.values(this.state.items).every(v => v)) {
+      setTimeout(() => this.winGame(), 1000);
+    }
+  },
+
+  triggerFearEvent: function() {
+    this.state.fear += 15;
+    AudioSys.playNoise(0.3);
+    this.log("¡¿Qué fue eso?!", "red");
+    // Glitch visual
+    document.body.style.transform = "translateX(5px)";
+    setTimeout(() => document.body.style.transform = "translateX(0)", 50);
+  },
+
+  winGame: function() {
+    this.state.running = false;
+    AudioSys.playTone(400, 'sine', 0.5);
+    AudioSys.playTone(600, 'sine', 0.5);
+    alert("¡ESCAPASTE CON VIDA! \nFelicidades.");
+    location.reload();
+  },
+
+  loseGame: function(reason) {
+    this.state.running = false;
+    const jump = document.getElementById('jumpscare-overlay');
+    jump.classList.add('active');
+    AudioSys.jumpscare();
+    
+    setTimeout(() => {
+      alert("GAME OVER\n" + reason);
+      location.reload();
+    }, 2000);
+  },
+
+  loop: function() {
+    if (!this.state.running) return;
+
+    // Gestión Batería
+    if (this.state.flashlightOn) {
+      this.state.battery -= this.config.drainRate;
+      this.state.fear += this.config.fearRateLight;
+    } else {
+      this.state.battery += this.config.rechargeRate;
+      this.state.fear += this.config.fearRateDark;
+    }
+
+    // Límites
+    if (this.state.battery > 100) this.state.battery = 100;
+    if (this.state.battery <= 0) {
+      this.state.flashlightOn = false; // Forzar apagado
+      this.state.battery = 0;
+      this.state.fear += 0.5; // El miedo sube rápido sin luz
+      document.getElementById('darkness-layer').classList.add('lights-off');
+    }
+
+    // Comprobación Muerte
+    if (this.state.fear >= 100) {
+      this.loseGame("Tu corazón no lo soportó.");
+      return;
+    }
+
+    // Latidos del corazón (dinámicos según el miedo)
+    const now = Date.now();
+    const beatDelay = Math.max(250, this.config.heartbeatBase - (this.state.fear * 8));
+    
+    if (now - this.state.lastHeartbeat > beatDelay) {
+      AudioSys.heartbeat();
+      this.state.lastHeartbeat = now;
+      // Efecto visual pulso rojo
+      const vignette = document.getElementById('red-vignette');
+      const opacity = this.state.fear / 200; // Max 0.5 opacity
+      vignette.style.boxShadow = `inset 0 0 ${100 + this.state.fear}px rgba(255,0,0,${opacity})`;
+      setTimeout(() => {
+         vignette.style.boxShadow = `inset 0 0 100px rgba(255,0,0,0)`;
+      }, 150);
+    }
+
+    this.updateUI();
+    requestAnimationFrame(() => this.loop());
+  },
+
+  updateUI: function() {
+    document.getElementById('fear-fill').style.width = `${this.state.fear}%`;
+    document.getElementById('fear-txt').innerText = Math.floor(this.state.fear) + "%";
+    
+    document.getElementById('battery-fill').style.width = `${this.state.battery}%`;
+    document.getElementById('batt-txt').innerText = Math.floor(this.state.battery) + "%";
+    
+    // Colores de estado
+    const battFill = document.getElementById('battery-fill');
+    if (this.state.battery < 20) battFill.style.background = "#d32f2f";
+    else battFill.style.background = "linear-gradient(90deg, #2E7D32, #4CAF50)";
+  },
+
+  log: function(msg, color="#fff") {
+    const container = document.getElementById('log-container');
+    const el = document.createElement('div');
+    el.className = 'log-msg';
+    el.innerText = msg;
+    el.style.color = color;
+    container.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+};
+</script>
+</body>
+</html>

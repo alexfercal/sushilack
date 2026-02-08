@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Moon Lander | SushiLack</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0f1016;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        h1 { margin-top: 0; text-shadow: 0 0 10px #00d2ff; }
+        canvas {
+            background: radial-gradient(circle at bottom, #1a1c29 0%, #000 100%);
+            border: 2px solid #3a7bd5;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.2);
+        }
+        #ui {
+            margin-top: 10px;
+            font-size: 1.2rem;
+            display: flex;
+            gap: 20px;
+        }
+        .hud-value { color: #00d2ff; font-weight: bold; }
+        .danger { color: #ff2e63; }
+        
+        /* Botón para volver */
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            text-decoration: none;
+            color: #fff;
+            background: #ff2e63;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <a href="Prueba.html" class="back-btn">⬅ Volver a la Base</a>
+
+    <h1>MOON LANDER: MISIÓN LUNAR</h1>
+    
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    
+    <div id="ui">
+        <span>COMBUSTIBLE: <span id="fuel" class="hud-value">100</span>%</span>
+        <span>VELOCIDAD VERTICAL: <span id="speed" class="hud-value">0</span></span>
+        <span>ESTADO: <span id="status">EN AIRE</span></span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Configuración de la Nave
+        const ship = {
+            x: 400,
+            y: 50,
+            width: 20,
+            height: 30,
+            dx: 0, // Velocidad horizontal
+            dy: 0, // Velocidad vertical
+            angle: 0,
+            thrust: 0.05,
+            gravity: 0.02, // Gravedad lunar (baja)
+            fuel: 100,
+            landed: false,
+            crashed: false
+        };
+
+        // Configuración del Terreno
+        const groundY = 550;
+        const padX = 350; // Donde está la plataforma de aterrizaje
+        const padWidth = 100;
+
+        // Controles
+        const keys = {
+            ArrowUp: false,
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        document.addEventListener('keydown', (e) => { if(keys.hasOwnProperty(e.code)) keys[e.code] = true; });
+        document.addEventListener('keyup', (e) => { if(keys.hasOwnProperty(e.code)) keys[e.code] = false; });
+
+        function update() {
+            if (ship.landed || ship.crashed) return;
+
+            // Rotación
+            if (keys.ArrowLeft) ship.angle -= 0.05;
+            if (keys.ArrowRight) ship.angle += 0.05;
+
+            // Propulsión (Física)
+            if (keys.ArrowUp && ship.fuel > 0) {
+                ship.dx += Math.sin(ship.angle) * ship.thrust;
+                ship.dy -= Math.cos(ship.angle) * ship.thrust;
+                ship.fuel -= 0.2;
+            }
+
+            // Gravedad constante
+            ship.dy += ship.gravity;
+
+            // Actualizar posición
+            ship.x += ship.dx;
+            ship.y += ship.dy;
+
+            // Límites de pantalla (rebote suave)
+            if (ship.x < 0) { ship.x = 0; ship.dx *= -0.5; }
+            if (ship.x > canvas.width) { ship.x = canvas.width; ship.dx *= -0.5; }
+
+            // Detección de Aterrizaje o Choque
+            // La nave toca el suelo (consideramos la altura de la nave)
+            if (ship.y + ship.height/2 >= groundY) {
+                // Verificar si está dentro de la plataforma
+                if (ship.x > padX && ship.x < padX + padWidth) {
+                    // Verificar velocidad (debe ser suave)
+                    if (ship.dy < 1 && Math.abs(ship.angle) < 0.2) {
+                        ship.landed = true;
+                        document.getElementById('status').innerText = "¡ATERRIZAJE EXITOSO! 🚀";
+                        document.getElementById('status').style.color = "#00ff00";
+                    } else {
+                        crash("¡VELOCIDAD EXCESIVA!");
+                    }
+                } else {
+                    crash("¡TERRENO INESTABLE!");
+                }
+                ship.dy = 0;
+                ship.dx = 0;
+            }
+
+            // Actualizar HUD (Interfaz)
+            document.getElementById('fuel').innerText = Math.floor(ship.fuel);
+            let speedDisplay = document.getElementById('speed');
+            speedDisplay.innerText = ship.dy.toFixed(2);
+            
+            if (ship.dy > 1) speedDisplay.classList.add('danger');
+            else speedDisplay.classList.remove('danger');
+        }
+
+        function crash(reason) {
+            ship.crashed = true;
+            document.getElementById('status').innerText = "ESTRELLADO: " + reason + " 💥";
+            document.getElementById('status').style.color = "#ff2e63";
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar Estrellas (Fondo)
+            ctx.fillStyle = "white";
+            for(let i=0; i<10; i++) ctx.fillRect(Math.random()*canvas.width, Math.random()*canvas.height, 2, 2);
+
+            // Dibujar Suelo Lunar
+            ctx.fillStyle = "#555";
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+
+            // Dibujar Plataforma de Aterrizaje
+            ctx.fillStyle = "#00d2ff"; // Azul neón
+            ctx.fillRect(padX, groundY, padWidth, 10);
+            
+            // Texto en la plataforma
+            ctx.fillStyle = "black";
+            ctx.font = "10px Arial";
+            ctx.fillText("LANDING ZONE", padX + 10, groundY + 9);
+
+            // Dibujar Nave
+            ctx.save();
+            ctx.translate(ship.x, ship.y);
+            ctx.rotate(ship.angle);
+
+            // Cuerpo de la nave (Triángulo)
+            if (!ship.crashed) {
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.moveTo(0, -15);
+                ctx.lineTo(10, 10);
+                ctx.lineTo(-10, 10);
+                ctx.fill();
+
+                // Fuego del motor
+                if (keys.ArrowUp && ship.fuel > 0) {
+                    ctx.fillStyle = "#ff9900";
+                    ctx.beginPath();
+                    ctx.moveTo(-5, 10);
+                    ctx.lineTo(5, 10);
+                    ctx.lineTo(0, 25 + Math.random()*10); // Llama parpadeante
+                    ctx.fill();
+                }
+            } else {
+                // Explosión simple
+                ctx.fillStyle = "orange";
+                ctx.beginPath();
+                ctx.arc(0, 0, 30, 0, Math.PI*2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            requestAnimationFrame(() => {
+                update();
+                draw();
+            });
+        }
+
+        // Iniciar juego
+        draw();
+
+    </script>
+</body>
+</html>

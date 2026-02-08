@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PvZ: Modo Tanque</title>
+    <style>
+        :root { --bg-sky: #90d4f7; --grass-light: #66bb6a; --grass-dark: #4caf50; }
+        body { background: #222; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: 'Segoe UI', sans-serif; overflow: hidden; user-select: none; }
+        
+        /* UI y HUD */
+        #hud { width: 720px; display: flex; justify-content: space-between; margin-bottom: 10px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 12px; border: 2px solid #5d4037; color: white; box-sizing: border-box; z-index: 100; }
+        .stats { display: flex; gap: 20px; font-size: 18px; align-items: center; }
+        
+        .card-container { display: flex; gap: 10px; }
+        .card { width: 60px; height: 70px; background: #444; border: 2px solid #777; border-radius: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; position: relative; }
+        .card:hover { transform: scale(1.05); border-color: white; }
+        .card.selected { background: #2e7d32; border-color: #ffd700; box-shadow: 0 0 10px #ffd700; }
+        .card-icon { font-size: 28px; }
+        .card-cost { font-size: 12px; font-weight: bold; margin-top: 5px; }
+
+        /* Tablero de Juego */
+        #game-wrapper { position: relative; width: 720px; height: 480px; box-shadow: 0 0 50px rgba(0,0,0,0.5); border: 8px solid #3e2723; border-radius: 4px; overflow: hidden; }
+        #game-container { position: relative; width: 100%; height: 100%; background: linear-gradient(to bottom, var(--grass-light) 50%, var(--grass-dark) 50%); background-size: 100% 120px; }
+        
+        /* Grid */
+        .grid { display: grid; grid-template-columns: 20px repeat(9, 1fr); grid-template-rows: repeat(5, 1fr); width: 100%; height: 100%; }
+        .cell { border: 1px solid rgba(0,0,0,0.05); position: relative; cursor: crosshair; }
+        .cell:hover { background: rgba(255,255,255,0.15); }
+
+        /* Entidades */
+        .entity { position: absolute; display: flex; justify-content: center; align-items: center; font-size: 40px; transition: top 0.2s; will-change: left, top; }
+        
+        .plant { width: 60px; height: 80px; z-index: 10; filter: drop-shadow(0 5px 5px rgba(0,0,0,0.3)); }
+        .zombie { width: 60px; height: 90px; z-index: 20; filter: drop-shadow(0 5px 5px rgba(0,0,0,0.5)); transition: left 0.05s linear; }
+        .bullet { width: 15px; height: 15px; background: #00ff00; border-radius: 50%; border: 1px solid #006400; z-index: 30; box-shadow: 0 0 5px #00ff00; }
+        
+        .sun { position: absolute; font-size: 35px; cursor: pointer; z-index: 50; animation: spin 4s linear infinite; filter: drop-shadow(0 0 10px yellow); transition: transform 0.2s; }
+        .sun:hover { transform: scale(1.3); }
+        .sun:active { transform: scale(0.0); opacity: 0; }
+
+        .mower { width: 50px; height: 40px; font-size: 30px; position: absolute; left: -10px; z-index: 5; transition: left 2s linear; }
+
+        /* Barra de Vida */
+        .hp-bar { position: absolute; top: -5px; width: 40px; height: 4px; background: red; border-radius: 2px; overflow: hidden; pointer-events: none; }
+        .hp-fill { height: 100%; background: #00e676; width: 100%; transition: width 0.2s; }
+
+        .hit { filter: brightness(2) sepia(1) hue-rotate(-50deg) saturate(5) !important; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        #game-over { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; display: none; }
+        button { padding: 10px 20px; font-size: 20px; background: #4caf50; border: none; color: white; cursor: pointer; border-radius: 5px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="stats">
+        <span>☀️ <span id="sun-count">2000</span></span>
+        <span>🧟 Score: <span id="score-count">0</span></span>
+    </div>
+    <div class="card-container">
+        <div class="card selected" onclick="selectPlant('pea', 50, this)">
+            <div class="card-icon">🌻</div>
+            <div class="card-cost">50</div>
+        </div>
+        <div class="card" onclick="selectPlant('shooter', 100, this)">
+            <div class="card-icon">🌱</div>
+            <div class="card-cost">100</div>
+        </div>
+        <div class="card" onclick="selectPlant('wallnut', 50, this)">
+            <div class="card-icon">🥔</div>
+            <div class="card-cost">50</div>
+        </div>
+    </div>
+</div>
+
+<div id="game-wrapper">
+    <div id="game-container"></div>
+    <div id="game-over">
+        <h1>¡TE HAN COMIDO EL CEREBRO!</h1>
+        <p>Puntuación: <span id="final-score">0</span></p>
+        <button onclick="location.reload()">Reintentar</button>
+    </div>
+</div>
+
+<script>
+    const container = document.getElementById('game-container');
+    const sunDisplay = document.getElementById('sun-count');
+    const scoreDisplay = document.getElementById('score-count');
+    
+    // --- CAMBIOS: SOLES INICIALES ---
+    let gameState = {
+        suns: 2000, // <--- CAMBIO: Empiezas con 2000
+        score: 0,
+        running: true,
+        spawnRate: 4000,
+        plants: [],
+        zombies: [],
+        bullets: [],
+        mowers: []
+    };
+
+    let selection = { type: 'pea', cost: 50 };
+
+    function initGrid() {
+        for(let r=0; r<5; r++){
+            let mower = document.createElement('div');
+            mower.className = 'mower';
+            mower.innerText = '🚜';
+            mower.style.top = (r * 96 + 25) + 'px';
+            mower.dataset.row = r;
+            mower.active = true;
+            mower.x = -10;
+            container.appendChild(mower);
+            gameState.mowers.push(mower);
+
+            for(let c=0; c<9; c++){
+                let cell = document.createElement('div');
+                cell.style.position = 'absolute';
+                cell.style.left = (c * 75 + 40) + 'px';
+                cell.style.top = (r * 96) + 'px';
+                cell.style.width = '75px';
+                cell.style.height = '96px';
+                cell.className = 'cell';
+                cell.onclick = () => tryPlant(c, r);
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    window.selectPlant = (type, cost, card) => {
+        selection = { type, cost };
+        document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+    };
+
+    function tryPlant(col, row) {
+        if (!gameState.running) return;
+        if (gameState.plants.some(p => p.c === col && p.r === row)) return;
+        
+        if (gameState.suns >= selection.cost) {
+            updateSun(-selection.cost);
+            createPlant(col, row, selection.type);
+        }
+    }
+
+    function createPlant(c, r, type) {
+        const el = document.createElement('div');
+        el.className = 'plant entity';
+        let hp = 100;
+        let icon = '🌱';
+        
+        // --- CAMBIOS: VIDA DE LAS PLANTAS ---
+        if(type === 'pea') { icon = '🌻'; hp = 300; }     // Girasol resistente
+        if(type === 'shooter') { icon = '🔫'; hp = 500; } // Lanzaguisantes tanque
+        if(type === 'wallnut') { icon = '🥔'; hp = 3000; }// Nuez casi inmortal
+
+        el.innerHTML = `<div class="hp-bar"><div class="hp-fill"></div></div>${icon}`;
+        let x = c * 75 + 45;
+        let y = r * 96 + 10;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        container.appendChild(el);
+
+        gameState.plants.push({ el, c, r, x, y, type, hp, maxHp: hp, lastAction: 0 });
+    }
+
+    function spawnZombie() {
+        if(!gameState.running) return;
+        
+        const el = document.createElement('div');
+        el.className = 'zombie entity';
+        el.innerHTML = `<div class="hp-bar"><div class="hp-fill"></div></div>🧟`;
+        
+        const r = Math.floor(Math.random() * 5);
+        const y = r * 96;
+        const x = 720;
+
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        container.appendChild(el);
+
+        let maxHp = 100 + (gameState.score * 5);
+        
+        // --- CAMBIOS: VELOCIDAD ZOMBIE ---
+        // Velocidad entre 0.15 y 0.25 (Muy lento)
+        let slowSpeed = 0.15 + (Math.random() * 0.1);
+
+        gameState.zombies.push({ 
+            el, r, x, y, hp: maxHp, maxHp: maxHp, 
+            speed: slowSpeed, // <--- Asignar velocidad lenta
+            eating: false, lastEat: 0
+        });
+
+        let nextSpawn = Math.max(1000, gameState.spawnRate - (gameState.score * 50));
+        setTimeout(spawnZombie, nextSpawn);
+    }
+
+    function gameLoop() {
+        if(!gameState.running) return;
+
+        // Plantas
+        gameState.plants.forEach(p => {
+            if(p.type === 'pea' && Date.now() - p.lastAction > 5000) {
+                createSun(p.x, p.y, false);
+                p.lastAction = Date.now();
+            }
+            if(p.type === 'shooter' && Date.now() - p.lastAction > 1500) {
+                if(gameState.zombies.some(z => z.r === p.r && z.x > p.x)) {
+                    createBullet(p.x + 30, p.y + 30, p.r);
+                    p.lastAction = Date.now();
+                }
+            }
+        });
+
+        // Balas
+        gameState.bullets.forEach((b, i) => {
+            b.x += 6;
+            b.el.style.left = b.x + 'px';
+            let hit = false;
+            gameState.zombies.forEach(z => {
+                if(!hit && z.r === b.r && b.x >= z.x + 10 && b.x <= z.x + 50) {
+                    hit = true;
+                    damageZombie(z, 25);
+                    b.el.remove();
+                    gameState.bullets.splice(i, 1);
+                }
+            });
+            if(!hit && b.x > 750) { b.el.remove(); gameState.bullets.splice(i, 1); }
+        });
+
+        // Zombies
+        gameState.zombies.forEach((z, i) => {
+            let eatingPlant = null;
+            gameState.plants.forEach(p => {
+                if(p.r === z.r && z.x < p.x + 40 && z.x + 20 > p.x) {
+                    eatingPlant = p;
+                }
+            });
+
+            if(eatingPlant) {
+                if(Date.now() - z.lastEat > 500) {
+                    eatingPlant.hp -= 15;
+                    updateHpBar(eatingPlant);
+                    z.el.classList.add('hit');
+                    setTimeout(()=>z.el.classList.remove('hit'), 100);
+                    if(eatingPlant.hp <= 0) {
+                        eatingPlant.el.remove();
+                        gameState.plants = gameState.plants.filter(pl => pl !== eatingPlant);
+                    }
+                    z.lastEat = Date.now();
+                }
+            } else {
+                z.x -= z.speed;
+                z.el.style.left = z.x + 'px';
+            }
+
+            if(z.x < 10) {
+                let mower = gameState.mowers.find(m => m.dataset.row == z.r && m.active);
+                if(mower) {
+                    activateMower(mower);
+                } else if(z.x < -40) {
+                    endGame();
+                }
+            }
+        });
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    function updateSun(amount) {
+        gameState.suns += amount;
+        sunDisplay.innerText = Math.floor(gameState.suns);
+    }
+
+    function createSun(x, y, falling) {
+        const sun = document.createElement('div');
+        sun.innerText = '☀️';
+        sun.className = 'sun';
+        sun.style.left = x + 'px';
+        let currentY = falling ? -50 : y;
+        let targetY = falling ? Math.random() * 400 + 50 : y;
+        sun.style.top = currentY + 'px';
+        container.appendChild(sun);
+
+        if(falling) {
+            let fallInt = setInterval(() => {
+                currentY += 2;
+                sun.style.top = currentY + 'px';
+                if(currentY >= targetY) clearInterval(fallInt);
+            }, 20);
+        }
+
+        sun.onmousedown = () => {
+            updateSun(25);
+            sun.style.opacity = "0";
+            setTimeout(() => sun.remove(), 200);
+        };
+        setTimeout(() => { if(sun.parentNode) sun.remove() }, 8000);
+    }
+
+    function createBullet(x, y, r) {
+        const b = document.createElement('div');
+        b.className = 'bullet';
+        b.style.left = x + 'px';
+        b.style.top = y + 'px';
+        container.appendChild(b);
+        gameState.bullets.push({ el: b, x, y, r });
+    }
+
+    function damageZombie(z, dmg) {
+        z.hp -= dmg;
+        z.el.classList.add('hit');
+        setTimeout(() => z.el.classList.remove('hit'), 100);
+        updateHpBar(z);
+        if(z.hp <= 0) {
+            z.el.remove();
+            gameState.zombies = gameState.zombies.filter(zm => zm !== z);
+            gameState.score++;
+            scoreDisplay.innerText = gameState.score;
+        }
+    }
+
+    function updateHpBar(entity) {
+        const pct = (entity.hp / entity.maxHp) * 100;
+        entity.el.querySelector('.hp-fill').style.width = Math.max(0, pct) + '%';
+    }
+
+    function activateMower(mower) {
+        mower.active = false;
+        let mInt = setInterval(() => {
+            mower.x += 10;
+            mower.style.left = mower.x + 'px';
+            gameState.zombies.forEach(z => {
+                if(z.r == mower.dataset.row && z.x < mower.x + 50 && z.x > mower.x - 20) {
+                    damageZombie(z, 9999);
+                }
+            });
+            if(mower.x > 750) { clearInterval(mInt); mower.remove(); }
+        }, 20);
+    }
+
+    function endGame() {
+        gameState.running = false;
+        document.getElementById('game-over').style.display = 'flex';
+        document.getElementById('final-score').innerText = gameState.score;
+    }
+
+    initGrid();
+    gameLoop();
+    setTimeout(spawnZombie, 2000);
+    setInterval(() => { if(gameState.running) createSun(Math.random()*700, 0, true) }, 6000);
+
+</script>
+</body>
+</html>
