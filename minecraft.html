@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Minecraft JS STABLE v3.0 + Música</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  body { 
+    margin: 0; overflow: hidden; background: #000; 
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+  }
+  
+  /* UI General */
+  #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  
+  /* Stats Panel */
+  #stats-panel {
+    position: absolute; top: 10px; left: 10px;
+    color: white; background: rgba(0,0,0,0.6);
+    padding: 10px; border-radius: 4px; font-size: 12px;
+    font-family: monospace; text-shadow: 1px 1px 0 #000;
+  }
+
+  /* Crosshair */
+  #crosshair {
+    position: absolute; top: 50%; left: 50%;
+    width: 20px; height: 20px;
+    transform: translate(-50%, -50%);
+    z-index: 50;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(255, 255, 255, 0.8);
+    box-shadow: 0 0 2px black;
+  }
+  #crosshair::before { width: 2px; height: 20px; left: 9px; }
+  #crosshair::after { width: 20px; height: 2px; top: 9px; }
+
+  /* Hotbar */
+  #hotbar-container {
+    position: absolute; bottom: 10px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.5);
+    padding: 5px; border-radius: 5px;
+    display: flex; gap: 5px;
+    pointer-events: auto;
+  }
+  .slot {
+    width: 50px; height: 50px;
+    border: 3px solid #333; background: rgba(0,0,0,0.4);
+    display: flex; justify-content: center; align-items: center;
+    font-size: 24px; position: relative; color: white;
+    transition: transform 0.1s;
+  }
+  .slot.active { border-color: white; transform: scale(1.1); background: rgba(100,100,100,0.5); }
+  .slot span { position: absolute; bottom: 2px; right: 2px; font-size: 10px; font-weight: bold; }
+
+  /* Messages */
+  #message {
+    position: absolute; top: 75%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffd700; font-size: 18px; text-shadow: 2px 2px 0 #000;
+    opacity: 0; transition: opacity 0.3s; text-align: center;
+    background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 10px;
+  }
+
+  /* Menu */
+  #menu {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    pointer-events: all; z-index: 100;
+    backdrop-filter: blur(5px);
+  }
+  #menu h1 { color: white; font-size: 50px; margin-bottom: 10px; text-shadow: 4px 4px 0 #333; }
+  #menu button {
+    padding: 15px 40px; font-size: 20px;
+    background: #4CAF50; color: white; border: none;
+    cursor: pointer; border-bottom: 4px solid #2E7D32;
+    margin-top: 20px; border-radius: 5px;
+  }
+  #menu button:hover { transform: translateY(2px); border-bottom-width: 2px; }
+  
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<audio id="bgMusic" loop>
+    <source src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Erik_Satie_-_Gymnopedie_No_1.ogg" type="audio/ogg">
+    <source src="tu_musica.mp3" type="audio/mpeg">
+</audio>
+
+<div id="menu">
+  <h1>MINECRAFT JS v3.0</h1>
+  <div style="color: #ccc; text-align:center; line-height:1.6;">
+    🖱️ <b>Click Izq:</b> Romper | 🖱️ <b>Click Der:</b> Poner<br>
+    ⌨️ <b>WASD:</b> Mover | <b>Espacio:</b> Saltar<br>
+    ✈️ <b>F:</b> Volar | 🎒 <b>1-9:</b> Bloques
+  </div>
+  <button onclick="startGame()">CLICK PARA JUGAR 🎵</button>
+</div>
+
+<div id="ui-layer">
+  <div id="stats-panel">Versión Estable + Música<br>FPS: <span id="fps">60</span></div>
+  <div id="crosshair"></div>
+  <div id="message"></div>
+  <div id="hotbar-container"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152/build/three.min.js"></script>
+<script>
+/** 1. CONFIGURACIÓN Y UTILIDADES **/
+const BLOCK_TYPES = [
+    { name: "Hierba", color: "#55aa55" }, 
+    { name: "Tierra", color: "#8b5a2b" }, 
+    { name: "Piedra", color: "#777777" }, 
+    { name: "Madera", color: "#8B4513" }, 
+    { name: "Hojas",  color: "#228b22" }, 
+    { name: "Arena",  color: "#f4a460" }, 
+    { name: "Agua",   color: "#1e90ff", transparent: true }, 
+    { name: "Ladrillo", color: "#a0522d" }, 
+    { name: "Cristal", color: "#aaddff", transparent: true }  
+];
+
+// Generador de Texturas Rápido
+function createTexture(color) {
+    const cvs = document.createElement('canvas');
+    cvs.width = 64; cvs.height = 64;
+    const ctx = cvs.getContext('2d');
+    ctx.fillStyle = color; ctx.fillRect(0,0,64,64);
+    // Ruido simple
+    for(let i=0; i<300; i++) {
+        ctx.fillStyle = Math.random()>0.5 ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+        ctx.fillRect(Math.random()*64, Math.random()*64, 4, 4);
+    }
+    // Borde
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 4; ctx.strokeRect(0,0,64,64);
+    const tex = new THREE.CanvasTexture(cvs);
+    tex.magFilter = THREE.NearestFilter;
+    return tex;
+}
+const materials = BLOCK_TYPES.map(b => new THREE.MeshLambertMaterial({
+    map: createTexture(b.color),
+    transparent: b.transparent,
+    opacity: b.transparent ? 0.6 : 1
+}));
+
+/** 2. ESCENA THREE.JS **/
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 20, 80);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 100);
+const renderer = new THREE.WebGLRenderer({antialias: false}); // Mejor rendimiento
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// Luces
+const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+sun.position.set(50, 80, 50);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 1024; sun.shadow.mapSize.height = 1024;
+scene.add(sun);
+
+// Mano del jugador
+const handGroup = new THREE.Group();
+const handMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.8), materials[0]);
+handMesh.position.set(0.5, -0.5, -0.8);
+handMesh.rotation.set(0.2, -0.1, 0);
+handMesh.userData = { isHand: true }; // IMPORTANTE: Para que el raycaster la ignore
+handGroup.add(handMesh);
+camera.add(handGroup);
+scene.add(camera);
+
+/** 3. MUNDO Y CHUNKS **/
+const world = new Map(); // "x,y,z" -> Mesh
+const CHUNK_SIZE = 16;
+const boxGeo = new THREE.BoxGeometry(1,1,1);
+
+function addBlock(x, y, z, typeIdx) {
+    const key = `${x},${y},${z}`;
+    if(world.has(key)) return; // Ya existe
+
+    const mesh = new THREE.Mesh(boxGeo, materials[typeIdx]);
+    mesh.position.set(x, y, z);
+    mesh.userData = { type: typeIdx, isBlock: true, key: key };
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    
+    scene.add(mesh);
+    world.set(key, mesh);
+    return mesh;
+}
+
+function removeBlock(mesh) {
+    scene.remove(mesh);
+    world.delete(mesh.userData.key);
+}
+
+// Generación inicial simple (Suelo plano + Arboles)
+function generateWorld() {
+    for(let x=-20; x<20; x++) {
+        for(let z=-20; z<20; z++) {
+            addBlock(x, 0, z, 0); // Hierba
+            addBlock(x, -1, z, 1); // Tierra
+            addBlock(x, -2, z, 2); // Piedra
+            
+            // Arbol Random
+            if(Math.abs(x)>3 && Math.random() > 0.97) {
+                // Tronco
+                addBlock(x, 1, z, 3);
+                addBlock(x, 2, z, 3);
+                addBlock(x, 3, z, 3);
+                // Hojas
+                for(let lx=-1; lx<=1; lx++) {
+                    for(let lz=-1; lz<=1; lz++) {
+                        addBlock(x+lx, 4, z+lz, 4);
+                    }
+                }
+                addBlock(x, 5, z, 4);
+            }
+        }
+    }
+}
+
+/** 4. FÍSICA Y CONTROLES **/
+const keys = {};
+let velocity = new THREE.Vector3();
+let canJump = false;
+let isFlying = false;
+let selectedSlot = 0;
+
+// IMPORTANTE: Desactivar menú click derecho
+document.addEventListener('contextmenu', event => event.preventDefault());
+
+document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if(e.code === 'KeyF') { isFlying = !isFlying; velocity.y = 0; showMsg(isFlying ? "✈️ Vuelo ON" : "🚶 Vuelo OFF"); }
+    if(e.key >= 1 && e.key <= 9) {
+        selectedSlot = e.key - 1;
+        updateUI();
+    }
+});
+document.addEventListener('keyup', e => keys[e.code] = false);
+
+// Raycaster (Poner/Romper)
+const raycaster = new THREE.Raycaster();
+raycaster.far = 6; 
+const center = new THREE.Vector2(0,0);
+
+document.addEventListener('mousedown', e => {
+    if(!document.pointerLockElement) {
+        document.body.requestPointerLock();
+        return;
+    }
+    
+    // Animación mano
+    handMesh.position.z = -1.2; 
+    setTimeout(()=> handMesh.position.z = -0.8, 100);
+
+    raycaster.setFromCamera(center, camera);
+    // Filtrar solo bloques, ignorar la mano y el cielo
+    const intersects = raycaster.intersectObjects(scene.children).filter(h => h.object.userData.isBlock);
+
+    if(intersects.length > 0) {
+        const hit = intersects[0];
+        
+        if(e.button === 0) { // Izq: Romper
+            removeBlock(hit.object);
+        } else if(e.button === 2) { // Der: Poner
+            const p = hit.point.clone().add(hit.face.normal.multiplyScalar(0.5)).floor();
+            
+            // Evitar poner bloque dentro del jugador
+            const playerPos = camera.position.clone().floor();
+            
+            // Comprobación simple de colisión al construir
+            const dist = p.distanceTo(camera.position);
+            if(dist > 1.2) { 
+                addBlock(p.x, p.y, p.z, selectedSlot);
+            } else {
+                showMsg("❌ Muy cerca");
+            }
+        }
+    }
+});
+
+// Colisiones sólidas
+function checkCollision(pos) {
+    const x = Math.round(pos.x);
+    const y = Math.round(pos.y - 1.5); // Altura pies
+    const z = Math.round(pos.z);
+    return world.has(`${x},${y},${z}`) || world.has(`${x},${y+1},${z}`);
+}
+
+function updatePhysics() {
+    const speed = isFlying ? 0.4 : 0.12;
+    
+    // Movimiento
+    if(keys['KeyW']) camera.translateZ(-speed);
+    if(keys['KeyS']) camera.translateZ(speed);
+    if(keys['KeyA']) camera.translateX(-speed);
+    if(keys['KeyD']) camera.translateX(speed);
+    
+    if(!isFlying) camera.position.y -= 0;
+
+    // Gravedad y Salto
+    if(isFlying) {
+        if(keys['Space']) camera.position.y += speed;
+        if(keys['ShiftLeft']) camera.position.y -= speed;
+        velocity.y = 0;
+    } else {
+        if(keys['Space'] && canJump) {
+            velocity.y = 0.25;
+            canJump = false;
+        }
+        velocity.y -= 0.012; // Gravedad
+        camera.position.y += velocity.y;
+        
+        // Colisión con suelo (Simple)
+        const feetY = Math.floor(camera.position.y - 1.5);
+        if(world.has(`${Math.round(camera.position.x)},${feetY},${Math.round(camera.position.z)}`)) {
+            velocity.y = 0;
+            camera.position.y = feetY + 2.5; // Ajuste para quedarse encima
+            canJump = true;
+        }
+    }
+    
+    // Reset si caes
+    if(camera.position.y < -30) {
+        camera.position.set(0, 10, 0);
+        velocity.y = 0;
+    }
+}
+
+/** 5. UI Y LOOP **/
+function initUI() {
+    const container = document.getElementById('hotbar-container');
+    container.innerHTML = '';
+    BLOCK_TYPES.forEach((b, i) => {
+        const d = document.createElement('div');
+        d.className = `slot ${i===0?'active':''}`;
+        d.id = `slot-${i}`;
+        d.style.borderBottom = `4px solid ${b.color}`;
+        d.innerHTML = `<span>${i+1}</span>`;
+        container.appendChild(d);
+    });
+}
+
+function updateUI() {
+    document.querySelectorAll('.slot').forEach(e => e.classList.remove('active'));
+    const el = document.getElementById(`slot-${selectedSlot}`);
+    if(el) el.classList.add('active');
+    handMesh.material = materials[selectedSlot]; // Actualizar mano
+    showMsg(`Bloque: ${BLOCK_TYPES[selectedSlot].name}`);
+}
+
+function showMsg(txt) {
+    const m = document.getElementById('message');
+    m.innerText = txt; m.style.opacity = 1;
+    setTimeout(()=>m.style.opacity=0, 2000);
+}
+
+// Bucle principal
+let isRunning = false;
+function animate() {
+    requestAnimationFrame(animate);
+    if(!isRunning) return;
+    
+    updatePhysics();
+    renderer.render(scene, camera);
+}
+
+// Inicio MODIFICADO PARA MÚSICA
+function startGame() {
+    document.getElementById('menu').classList.add('hidden');
+    
+    // INICIAR MÚSICA
+    const music = document.getElementById('bgMusic');
+    music.volume = 0.4; // Volumen al 40%
+    music.play().catch(e => console.log("Error al reproducir música:", e));
+
+    generateWorld();
+    initUI();
+    camera.position.set(0, 5, 5);
+    isRunning = true;
+    document.body.requestPointerLock();
+    animate();
+}
+
+// Control de ratón
+document.addEventListener('mousemove', e => {
+    if(document.pointerLockElement) {
+        camera.rotation.y -= e.movementX * 0.002;
+        camera.rotation.x -= e.movementY * 0.002;
+        camera.rotation.x = Math.max(-1.5, Math.min(1.5, camera.rotation.x)); // Limitar mirar arriba/abajo
+        camera.rotation.order = "YXZ";
+    }
+});
+
+// Resize
+window.onresize = () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+};
+</script>
+</body>
+</html>

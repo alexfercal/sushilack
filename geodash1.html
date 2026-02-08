@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoDash: PvZ CloLORS Evolution</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        
+        #ui { 
+            position: absolute; top: 20px; left: 20px; 
+            color: #fff; font-size: 28px; font-weight: bold; 
+            text-shadow: 2px 2px #000; pointer-events: none; z-index: 10;
+        }
+
+        #startScreen {
+            position: absolute; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            color: white; z-index: 100;
+        }
+
+        button {
+            padding: 20px 40px; font-size: 24px; cursor: pointer;
+            background: #2ecc71; color: white; border: none; 
+            border-radius: 10px; font-weight: bold; transition: 0.2s;
+        }
+        button:hover { transform: scale(1.1); background: #27ae60; }
+    </style>
+</head>
+<body>
+
+    <div id="startScreen">
+        <h1 style="color: #2ecc71; margin-bottom: 5px;">GEOMETRY DASH</h1>
+        <h3 style="margin-bottom: 30px; color: #bdc3c7;">PVZ EVOLUTION</h3>
+        <button onclick="startGame()">¡JUGAR!</button>
+    </div>
+
+    <div id="ui">SCORE: <span id="score">0</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <audio id="bgMusic" loop>
+        <source src="Download.mp4" type="audio/mp4">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const bgMusic = document.getElementById('bgMusic');
+        const startScreen = document.getElementById('startScreen');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let score = 0;
+        let gameActive = false;
+        let frameCount = 0;
+        let obstacleSpeed = 9;
+        let obstacles = [];
+
+        const player = {
+            x: 150, y: 0, size: 50,
+            color: "#fff", dy: 0, jumpForce: 16,
+            gravity: 0.9, grounded: false, rotation: 0
+        };
+
+        // Función para obtener el color de fondo según el score
+        function getBackgroundColor() {
+            if (score >= 160) return "#000"; // Debería ganar antes
+            if (score >= 150) return "#000000"; // Negro
+            if (score >= 100) return "#c0392b"; // Rojo
+            if (score >= 50)  return "#f1c40f"; // Amarillo
+            if (score >= 20)  return "#27ae60"; // Verde
+            return "#1e3799"; // Azul Inicial
+        }
+
+        function startGame() {
+            startScreen.style.display = 'none';
+            score = 0;
+            scoreElement.innerText = "0";
+            obstacles = [];
+            obstacleSpeed = 9;
+            gameActive = true;
+            bgMusic.currentTime = 0;
+            bgMusic.play().catch(e => console.log("Error audio:", e));
+            requestAnimationFrame(draw);
+        }
+
+        function spawnObstacle() {
+            obstacles.push({
+                x: canvas.width,
+                y: canvas.height - 70,
+                width: 50,
+                height: 60
+            });
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            if (score >= 160) {
+                victory();
+                return;
+            }
+
+            // Físicas
+            player.dy += player.gravity;
+            player.y += player.dy;
+
+            const groundY = canvas.height - player.size - 10;
+            if (player.y > groundY) {
+                player.y = groundY;
+                player.dy = 0;
+                player.grounded = true;
+                player.rotation = Math.round(player.rotation / 90) * 90;
+            } else {
+                player.grounded = false;
+                player.rotation += 7;
+            }
+
+            // Generador de obstáculos
+            frameCount++;
+            let frequency = score > 100 ? 55 : 80;
+            if (frameCount % frequency === 0) spawnObstacle();
+
+            // Lógica de obstáculos
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= obstacleSpeed;
+
+                // Colisión ajustada (hitbox más justa)
+                if (
+                    player.x < obstacles[i].x + obstacles[i].width - 10 &&
+                    player.x + player.size > obstacles[i].x + 10 &&
+                    player.y + player.size > obstacles[i].y + 10
+                ) {
+                    gameOver();
+                }
+
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                    scoreElement.innerText = score;
+                    obstacleSpeed += 0.07;
+                }
+            }
+        }
+
+        function draw() {
+            // 1. Dibujar Fondo (esto evita que se vea blanco)
+            ctx.fillStyle = getBackgroundColor();
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Dibujar Suelo
+            ctx.fillStyle = "rgba(255,255,255,0.3)";
+            ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
+
+            // 3. Dibujar Jugador
+            ctx.save();
+            ctx.translate(player.x + player.size/2, player.y + player.size/2);
+            ctx.rotate(player.rotation * Math.PI / 180);
+            ctx.fillStyle = player.color;
+            ctx.fillRect(-player.size/2, -player.size/2, player.size, player.size);
+            ctx.strokeStyle = "#333";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-player.size/2, -player.size/2, player.size, player.size);
+            ctx.restore();
+
+            // 4. Dibujar Obstáculos
+            ctx.fillStyle = "#34495e";
+            obstacles.forEach(obs => {
+                ctx.beginPath();
+                ctx.moveTo(obs.x, obs.y + obs.height);
+                ctx.lineTo(obs.x + obs.width / 2, obs.y);
+                ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+                ctx.closePath();
+                ctx.fill();
+                ctx.strokeStyle = "#fff";
+                ctx.stroke();
+            });
+
+            if (gameActive) {
+                update();
+                requestAnimationFrame(draw);
+            }
+        }
+
+        function jump() {
+            if (player.grounded && gameActive) {
+                player.dy = -player.jumpForce;
+                player.grounded = false;
+            }
+        }
+
+        function gameOver() {
+            gameActive = false;
+            bgMusic.pause();
+            setTimeout(() => {
+                alert("¡GAME OVER! Puntuación: " + score);
+                location.reload();
+            }, 10);
+        }
+
+        function victory() {
+            gameActive = false;
+            bgMusic.pause();
+            alert("¡FELICIDADES! Has llegado al nivel Negro y completado el juego.");
+            location.reload();
+        }
+
+        // Controles
+        window.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') jump(); });
+        window.addEventListener('mousedown', jump);
+        window.addEventListener('touchstart', (e) => { jump(); e.preventDefault(); }, {passive: false});
+        
+        // Ajustar canvas si cambia el tamaño de ventana
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>

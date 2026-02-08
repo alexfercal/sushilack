@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survival Game - Desastres Naturales</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%);
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        #ui {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 20px;
+        }
+
+        .stat {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .stat-value {
+            font-size: 24px;
+        }
+
+        #hpBar {
+            flex: 1;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #hpFill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff6b6b 0%, #ee5a6f 100%);
+            transition: width 0.3s ease;
+            border-radius: 15px;
+            box-shadow: inset 0 2px 10px rgba(255, 255, 255, 0.3);
+        }
+
+        #hpText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        #announcement {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #ff4757;
+            padding: 30px 60px;
+            border-radius: 15px;
+            font-size: 36px;
+            font-weight: bold;
+            display: none;
+            z-index: 1000;
+            border: 3px solid #ff4757;
+            box-shadow: 0 0 30px rgba(255, 71, 87, 0.5);
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 40px 60px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+            border: 3px solid #667eea;
+        }
+
+        #gameOver h1 {
+            color: #ff4757;
+            margin-bottom: 20px;
+            font-size: 48px;
+        }
+
+        #gameOver p {
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        #restartBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        #restartBtn:hover {
+            transform: scale(1.1);
+        }
+
+        #controls {
+            color: white;
+            text-align: center;
+            margin-top: 15px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div class="stat">
+                <span class="stat-label">Puntos:</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            <div id="hpBar">
+                <div id="hpFill"></div>
+                <div id="hpText">100 / 100</div>
+            </div>
+            <div class="stat">
+                <span class="stat-label">⚠️</span>
+                <span class="stat-value" id="disaster">---</span>
+            </div>
+        </div>
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        <div id="controls">
+            🎮 Controles: ⬅️ A/← | ➡️ D/→ | ⬆️ SPACE/↑ para saltar | 🏃 ¡Avanza lo más lejos posible!
+        </div>
+    </div>
+
+    <div id="announcement"></div>
+    <div id="gameOver">
+        <h1>¡GAME OVER!</h1>
+        <p>Puntuación Final: <span id="finalScore">0</span></p>
+        <button id="restartBtn">Jugar de Nuevo</button>
+    </div>
+
+    <script>
+        /* ================= CONFIG ================= */
+        const CONFIG = {
+            GRAVITY: 0.6,
+            FPS: 60,
+            CANVAS_W: 800,
+            CANVAS_H: 500,
+            FLOOR_Y: 450
+        };
+
+        /* ================= CANVAS ================= */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        /* ================= UI ELEMENTS ================= */
+        const scoreEl = document.getElementById('score');
+        const hpFillEl = document.getElementById('hpFill');
+        const hpTextEl = document.getElementById('hpText');
+        const disasterEl = document.getElementById('disaster');
+        const announcementEl = document.getElementById('announcement');
+        const gameOverEl = document.getElementById('gameOver');
+        const finalScoreEl = document.getElementById('finalScore');
+        const restartBtn = document.getElementById('restartBtn');
+
+        /* ================= ESTADO ================= */
+        let gameState = 'playing';
+        let frame = 0;
+        let score = 0;
+        let shakeTime = 0;
+        let shakeIntensity = 0;
+
+        /* ================= DESASTRES ================= */
+        const DISASTERS = [
+            { name: 'METEORITOS', icon: '☄️', color: '#ff4757' },
+            { name: 'INUNDACIÓN', icon: '🌊', color: '#1e90ff' },
+            { name: 'VENDAVAL', icon: '🌪️', color: '#95a5a6' }
+        ];
+        let currentDisaster = null;
+        let disasterTimer = 0;
+        let waterLevel = CONFIG.CANVAS_H;
+        let windForce = 0;
+        let windDirection = 1;
+
+        /* ================= MAPA ================= */
+        let platforms = [];
+        let cameraX = 0;
+        let lastPlatformX = 0;
+        
+        // Generar plataformas iniciales
+        function generateInitialPlatforms() {
+            platforms = [];
+            lastPlatformX = 0;
+            
+            // Plataforma inicial del suelo
+            platforms.push({
+                x: 0,
+                y: 450,
+                w: 300,
+                h: 50,
+                color: '#2c3e50'
+            });
+            
+            lastPlatformX = 300;
+            
+            // Generar plataformas hacia adelante
+            for (let i = 0; i < 20; i++) {
+                generateNextPlatform();
+            }
+        }
+        
+        // Generar siguiente plataforma
+        function generateNextPlatform() {
+            const gapX = 50 + Math.random() * 120; // Distancia horizontal reducida
+            const gapY = -80 + Math.random() * 160; // Variación vertical reducida
+            const width = 100 + Math.random() * 120; // Plataformas más anchas
+            
+            const newX = lastPlatformX + gapX;
+            const lastY = platforms[platforms.length - 1].y;
+            let newY = lastY + gapY;
+            
+            // Limitar altura para que sea alcanzable
+            newY = Math.max(200, Math.min(450, newY));
+            
+            platforms.push({
+                x: newX,
+                y: newY,
+                w: width,
+                h: 20,
+                color: '#34495e'
+            });
+            
+            lastPlatformX = newX + width;
+        }
+        
+        generateInitialPlatforms();
+
+        /* ================= JUGADOR ================= */
+        const player = {
+            x: 100,
+            y: 300,
+            w: 30,
+            h: 50,
+            vx: 0,
+            vy: 0,
+            speed: 6,
+            jumpPower: -14, // Aumentado de -12 a -14 para saltar más alto
+            grounded: false,
+            hp: 100,
+            maxHp: 100,
+            invulnerable: 0,
+            colors: {
+                head: '#ffeb3b',
+                torso: '#2196f3',
+                legs: '#4caf50'
+            }
+        };
+
+        /* ================= ENTIDADES ================= */
+        let meteors = [];
+        let particles = [];
+        let clouds = [];
+
+        /* ================= INICIALIZAR NUBES ================= */
+        for (let i = 0; i < 8; i++) {
+            clouds.push({
+                x: Math.random() * CONFIG.CANVAS_W * 2,
+                y: Math.random() * 150,
+                w: 60 + Math.random() * 40,
+                h: 30 + Math.random() * 20,
+                speed: 0.8 + Math.random() * 0.5
+            });
+        }
+
+        /* ================= INPUT ================= */
+        const keys = {};
+        addEventListener('keydown', e => {
+            keys[e.code] = true;
+            e.preventDefault();
+        });
+        addEventListener('keyup', e => {
+            keys[e.code] = false;
+            e.preventDefault();
+        });
+
+        restartBtn.addEventListener('click', resetGame);
+
+        /* ================= LOOP ================= */
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        /* ================= UPDATE ================= */
+        function update() {
+            if (gameState !== 'playing') return;
+
+            frame++;
+
+            // Incrementar puntuación basado en distancia
+            const distanceScore = Math.floor(player.x / 100);
+            if (distanceScore > score) {
+                score = distanceScore;
+                scoreEl.innerText = score;
+            }
+
+            manageDisasters();
+            updatePlayer();
+            updateCamera();
+            updatePlatforms();
+            updateEntities();
+            updateParticles();
+            updateClouds();
+
+            if (shakeTime > 0) {
+                shakeTime--;
+                shakeIntensity = shakeTime * 0.5;
+            }
+
+            if (player.invulnerable > 0) player.invulnerable--;
+
+            updateUI();
+        }
+        
+        /* ================= CÁMARA ================= */
+        function updateCamera() {
+            // Seguir al jugador horizontalmente con suavizado
+            const targetCameraX = player.x - CONFIG.CANVAS_W / 3;
+            cameraX += (targetCameraX - cameraX) * 0.1;
+            cameraX = Math.max(0, cameraX);
+        }
+        
+        /* ================= PLATAFORMAS INFINITAS ================= */
+        function updatePlatforms() {
+            // Eliminar plataformas que quedaron muy atrás
+            platforms = platforms.filter(p => p.x + p.w > cameraX - 200);
+            
+            // Generar nuevas plataformas si es necesario
+            while (lastPlatformX < cameraX + CONFIG.CANVAS_W + 500) {
+                generateNextPlatform();
+            }
+        }
+
+        /* ================= UI UPDATE ================= */
+        function updateUI() {
+            const hpPercent = (player.hp / player.maxHp) * 100;
+            hpFillEl.style.width = hpPercent + '%';
+            hpTextEl.innerText = `${Math.ceil(player.hp)} / ${player.maxHp}`;
+
+            if (hpPercent < 30) {
+                hpFillEl.style.background = 'linear-gradient(90deg, #c0392b 0%, #e74c3c 100%)';
+            } else if (hpPercent < 60) {
+                hpFillEl.style.background = 'linear-gradient(90deg, #f39c12 0%, #f1c40f 100%)';
+            } else {
+                hpFillEl.style.background = 'linear-gradient(90deg, #27ae60 0%, #2ecc71 100%)';
+            }
+
+            if (currentDisaster) {
+                const disaster = DISASTERS.find(d => d.name === currentDisaster.name);
+                disasterEl.innerText = disaster.icon;
+            } else {
+                disasterEl.innerText = '---';
+            }
+        }
+
+        /* ================= JUGADOR ================= */
+        function updatePlayer() {
+            // Movimiento horizontal
+            if (keys.KeyD || keys.ArrowRight) {
+                player.vx = player.speed;
+            } else if (keys.KeyA || keys.ArrowLeft) {
+                player.vx = -player.speed;
+            } else {
+                player.vx *= 0.8;
+            }
+
+            // Aplicar viento
+            player.vx += windForce;
+            player.x += player.vx;
+
+            // Solo limitar el borde izquierdo (no hay límite derecho)
+            player.x = Math.max(cameraX, player.x);
+
+            // Gravedad
+            player.vy += CONFIG.GRAVITY;
+            player.y += player.vy;
+            player.grounded = false;
+
+            // Colisión con plataformas
+            for (const p of platforms) {
+                if (
+                    player.x + player.w > p.x &&
+                    player.x < p.x + p.w &&
+                    player.y + player.h >= p.y &&
+                    player.y + player.h <= p.y + player.vy + 2 &&
+                    player.vy >= 0
+                ) {
+                    player.grounded = true;
+                    player.vy = 0;
+                    player.y = p.y - player.h;
+                }
+            }
+
+            // Saltar
+            if ((keys.Space || keys.ArrowUp) && player.grounded) {
+                player.vy = player.jumpPower;
+                spawnJumpParticles();
+            }
+
+            // Caída fuera del mapa
+            if (player.y > 600) {
+                takeDamage(player.hp);
+            }
+        }
+
+        /* ================= DESASTRES ================= */
+        function manageDisasters() {
+            disasterTimer++;
+
+            // Iniciar desastre
+            if (disasterTimer === 300) {
+                currentDisaster = DISASTERS[Math.floor(Math.random() * DISASTERS.length)];
+                announce(`⚠️ ${currentDisaster.icon} ${currentDisaster.name} ${currentDisaster.icon} ⚠️`);
+                meteors = [];
+                waterLevel = CONFIG.CANVAS_H;
+                windForce = 0;
+            }
+
+            // Finalizar desastre
+            if (disasterTimer > 1200) {
+                currentDisaster = null;
+                disasterTimer = 0;
+                windForce = 0;
+            }
+
+            if (currentDisaster) {
+                if (currentDisaster.name === 'METEORITOS') updateMeteors();
+                if (currentDisaster.name === 'INUNDACIÓN') updateFlood();
+                if (currentDisaster.name === 'VENDAVAL') updateWind();
+            }
+        }
+
+        /* ================= METEORITOS ================= */
+        function updateMeteors() {
+            if (frame % 20 === 0) {
+                meteors.push({
+                    x: cameraX + Math.random() * CONFIG.CANVAS_W,
+                    y: -40,
+                    size: 15 + Math.random() * 25,
+                    vy: 6 + Math.random() * 4,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotationSpeed: (Math.random() - 0.5) * 0.2
+                });
+            }
+
+            meteors = meteors.filter(m => {
+                m.y += m.vy;
+                m.rotation += m.rotationSpeed;
+
+                // Colisión con jugador
+                if (rectCircleHit(player, m) && player.invulnerable === 0) {
+                    takeDamage(20);
+                    shakeScreen(15);
+                    spawnExplosion(m.x, m.y, '#ff4757', 30);
+                    return false;
+                }
+
+                // Impacto en el suelo
+                if (m.y > CONFIG.FLOOR_Y) {
+                    spawnExplosion(m.x, m.y, '#95a5a6', 20);
+                    shakeScreen(8);
+                    return false;
+                }
+                
+                // Eliminar meteoritos fuera de la pantalla
+                if (m.x < cameraX - 100 || m.x > cameraX + CONFIG.CANVAS_W + 100) {
+                    return false;
+                }
+                
+                return true;
+            });
+        }
+
+        /* ================= INUNDACIÓN ================= */
+        function updateFlood() {
+            if (waterLevel > 200) {
+                waterLevel -= 1;
+            }
+
+            // Daño por agua
+            if (player.y + player.h > waterLevel && player.invulnerable === 0) {
+                if (frame % 30 === 0) {
+                    takeDamage(5);
+                }
+                // Partículas de chapoteo
+                if (frame % 5 === 0) {
+                    spawnWaterParticles();
+                }
+            }
+        }
+
+        /* ================= VENDAVAL ================= */
+        function updateWind() {
+            if (frame % 120 === 0) {
+                windDirection *= -1;
+            }
+            windForce = Math.sin(frame * 0.05) * 1.2 * windDirection;
+
+            // Partículas de viento
+            if (frame % 3 === 0) {
+                particles.push({
+                    x: windForce > 0 ? 0 : CONFIG.CANVAS_W,
+                    y: Math.random() * CONFIG.CANVAS_H,
+                    vx: windForce * 8,
+                    vy: (Math.random() - 0.5) * 2,
+                    size: 2 + Math.random() * 3,
+                    life: 60,
+                    maxLife: 60,
+                    color: 'rgba(200, 200, 200, 0.5)'
+                });
+            }
+        }
+
+        /* ================= ENTIDADES ================= */
+        function updateEntities() {
+            // Actualizado en las funciones específicas de desastre
+        }
+
+        /* ================= PARTÍCULAS ================= */
+        function updateParticles() {
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2; // Gravedad para partículas
+                p.life--;
+                return p.life > 0;
+            });
+        }
+
+        /* ================= NUBES ================= */
+        function updateClouds() {
+            clouds.forEach(cloud => {
+                cloud.x += cloud.speed;
+                
+                // Regenerar nubes que salen de la pantalla por la derecha
+                if (cloud.x > cameraX + CONFIG.CANVAS_W + 100) {
+                    cloud.x = cameraX - 100;
+                    cloud.y = Math.random() * 150;
+                }
+                
+                // Regenerar nubes que quedan muy atrás
+                if (cloud.x < cameraX - 200) {
+                    cloud.x = cameraX + CONFIG.CANVAS_W;
+                    cloud.y = Math.random() * 150;
+                }
+            });
+        }
+
+        /* ================= DAÑO ================= */
+        function takeDamage(amount) {
+            if (player.invulnerable > 0 && amount < player.hp) return;
+
+            player.hp = Math.max(0, player.hp - amount);
+            player.invulnerable = 30;
+
+            if (player.hp <= 0) {
+                gameOver();
+            }
+        }
+
+        /* ================= GAME OVER ================= */
+        function gameOver() {
+            gameState = 'gameOver';
+            finalScoreEl.innerText = score;
+            gameOverEl.style.display = 'block';
+        }
+
+        /* ================= RESET ================= */
+        function resetGame() {
+            gameState = 'playing';
+            frame = 0;
+            score = 0;
+            cameraX = 0;
+            player.hp = player.maxHp;
+            player.x = 100;
+            player.y = 300;
+            player.vx = 0;
+            player.vy = 0;
+            player.invulnerable = 0;
+            meteors = [];
+            particles = [];
+            currentDisaster = null;
+            disasterTimer = 0;
+            waterLevel = CONFIG.CANVAS_H;
+            windForce = 0;
+            scoreEl.innerText = 0;
+            gameOverEl.style.display = 'none';
+            
+            // Regenerar plataformas
+            generateInitialPlatforms();
+        }
+
+        /* ================= EFECTOS ================= */
+        function spawnExplosion(x, y, color, count = 20) {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count;
+                const speed = 2 + Math.random() * 4;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    size: 3 + Math.random() * 5,
+                    life: 30 + Math.random() * 30,
+                    maxLife: 60,
+                    color: color
+                });
+            }
+        }
+
+        function spawnJumpParticles() {
+            for (let i = 0; i < 8; i++) {
+                particles.push({
+                    x: player.x + player.w / 2 + (Math.random() - 0.5) * player.w,
+                    y: player.y + player.h,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: Math.random() * 2,
+                    size: 2 + Math.random() * 3,
+                    life: 20,
+                    maxLife: 20,
+                    color: '#95a5a6'
+                });
+            }
+        }
+
+        function spawnWaterParticles() {
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: player.x + Math.random() * player.w,
+                    y: waterLevel,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: -2 - Math.random() * 3,
+                    size: 3 + Math.random() * 4,
+                    life: 30,
+                    maxLife: 30,
+                    color: '#1e90ff'
+                });
+            }
+        }
+
+        function shakeScreen(intensity) {
+            shakeTime = 15;
+            shakeIntensity = intensity;
+        }
+
+        function announce(text) {
+            announcementEl.innerText = text;
+            announcementEl.style.display = 'block';
+            setTimeout(() => {
+                announcementEl.style.display = 'none';
+            }, 2000);
+        }
+
+        /* ================= COLISIONES ================= */
+        function rectCircleHit(rect, circle) {
+            const cx = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+            const cy = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+            const dx = circle.x - cx;
+            const dy = circle.y - cy;
+            return (dx * dx + dy * dy) < (circle.size * circle.size);
+        }
+
+        /* ================= DRAW ================= */
+        function draw() {
+            // Shake effect
+            let offsetX = 0, offsetY = 0;
+            if (shakeTime > 0) {
+                offsetX = (Math.random() - 0.5) * shakeIntensity;
+                offsetY = (Math.random() - 0.5) * shakeIntensity;
+            }
+
+            ctx.save();
+            ctx.translate(offsetX, offsetY);
+
+            // Cielo (gradiente)
+            const gradient = ctx.createLinearGradient(0, 0, 0, CONFIG.CANVAS_H);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#E0F6FF');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, CONFIG.CANVAS_W, CONFIG.CANVAS_H);
+
+            // Aplicar transformación de cámara para el mundo del juego
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // Nubes
+            drawClouds();
+
+            // Plataformas
+            drawPlatforms();
+
+            // Agua (inundación)
+            if (currentDisaster && currentDisaster.name === 'INUNDACIÓN') {
+                drawWater();
+            }
+
+            // Meteoros
+            drawMeteors();
+
+            // Partículas
+            drawParticles();
+
+            // Jugador
+            drawPlayer();
+
+            ctx.restore(); // Restaurar transformación de cámara
+
+            ctx.restore(); // Restaurar shake
+        }
+
+        /* ================= DRAW CLOUDS ================= */
+        function drawClouds() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            clouds.forEach(cloud => {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.h * 0.5, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.w * 0.3, cloud.y, cloud.h * 0.6, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.w * 0.7, cloud.y, cloud.h * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        /* ================= DRAW PLATFORMS ================= */
+        function drawPlatforms() {
+            platforms.forEach(p => {
+                // Sombra
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(p.x + 3, p.y + 3, p.w, p.h);
+
+                // Plataforma
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+
+                // Borde superior
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(p.x, p.y, p.w, 3);
+
+                // Textura
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < p.w; i += 20) {
+                    ctx.beginPath();
+                    ctx.moveTo(p.x + i, p.y);
+                    ctx.lineTo(p.x + i, p.y + p.h);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        /* ================= DRAW WATER ================= */
+        function drawWater() {
+            const waterStartX = Math.max(0, cameraX - 100);
+            const waterWidth = CONFIG.CANVAS_W + 200;
+            
+            ctx.fillStyle = 'rgba(30, 144, 255, 0.6)';
+            ctx.fillRect(waterStartX, waterLevel, waterWidth, CONFIG.CANVAS_H - waterLevel);
+
+            // Ondas
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                for (let x = waterStartX; x < waterStartX + waterWidth; x += 10) {
+                    const y = waterLevel + Math.sin(x * 0.05 + frame * 0.1 + i * 2) * 5;
+                    if (x === waterStartX) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        /* ================= DRAW METEORS ================= */
+        function drawMeteors() {
+            meteors.forEach(m => {
+                ctx.save();
+                ctx.translate(m.x, m.y);
+                ctx.rotate(m.rotation);
+
+                // Sombra
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(2, 2, m.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Meteorito
+                const meteorGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, m.size);
+                meteorGradient.addColorStop(0, '#ff6b6b');
+                meteorGradient.addColorStop(0.6, '#ee5a6f');
+                meteorGradient.addColorStop(1, '#8b0000');
+                ctx.fillStyle = meteorGradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, m.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Detalles
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(-m.size * 0.3, -m.size * 0.2, m.size * 0.2, 0, Math.PI * 2);
+                ctx.arc(m.size * 0.2, m.size * 0.3, m.size * 0.15, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+
+                // Estela
+                ctx.strokeStyle = 'rgba(255, 107, 107, 0.3)';
+                ctx.lineWidth = m.size * 0.5;
+                ctx.beginPath();
+                ctx.moveTo(m.x, m.y);
+                ctx.lineTo(m.x, m.y - m.vy * 5);
+                ctx.stroke();
+            });
+        }
+
+        /* ================= DRAW PARTICLES ================= */
+        function drawParticles() {
+            particles.forEach(p => {
+                const alpha = p.life / p.maxLife;
+                ctx.fillStyle = p.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        /* ================= DRAW PLAYER ================= */
+        function drawPlayer() {
+            const flicker = player.invulnerable > 0 && frame % 10 < 5;
+            if (flicker) return;
+
+            const x = player.x;
+            const y = player.y;
+
+            // Sombra
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.beginPath();
+            ctx.ellipse(x + player.w / 2, y + player.h + 2, player.w * 0.6, 4, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Cabeza
+            ctx.fillStyle = player.colors.head;
+            ctx.beginPath();
+            ctx.arc(x + player.w / 2, y + 10, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ojos
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x + player.w / 2 - 4, y + 8, 2, 0, Math.PI * 2);
+            ctx.arc(x + player.w / 2 + 4, y + 8, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Boca
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(x + player.w / 2, y + 12, 4, 0, Math.PI);
+            ctx.stroke();
+
+            // Torso
+            ctx.fillStyle = player.colors.torso;
+            ctx.fillRect(x + 5, y + 20, 20, 18);
+
+            // Brazos
+            ctx.fillStyle = player.colors.torso;
+            ctx.fillRect(x, y + 22, 5, 12);
+            ctx.fillRect(x + 25, y + 22, 5, 12);
+        
+            // Piernas
+            ctx.fillStyle = player.colors.legs;
+            ctx.fillRect(x + 8, y + 38, 6, 12);
+            ctx.fillRect(x + 16, y + 38, 6, 12);
+        }
+
+        /* ================= START ================= */
+        loop();
+    </script>
+</body>
+</html>
